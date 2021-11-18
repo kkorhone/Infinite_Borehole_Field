@@ -3,30 +3,25 @@ import time
 
 
 class Parameters:
-    """This class is used to store parameters regarding the borehole and heat extraction and injection from it."""
+    """This class is used to store parameters regarding the borehole and heat extraction from it."""
     
-    def __init__(self, L_borehole, D_borehole, borehole_spacing, E_annual, monthly_extraction, monthly_injection=np.zeros(12)):
-        assert len(monthly_extraction) == 12
-        assert len(monthly_injection) == 12
-        assert np.abs(np.sum(monthly_extraction)-1) < 1e-6
-        assert np.sum(monthly_injection) < 1+1e-6
+    def __init__(self, L_borehole, D_borehole, borehole_spacing, E_annual, monthly_fractions, num_years):
+        assert len(monthly_fractions) == 12
+        assert np.abs(np.sum(monthly_fractions)-1) < 1e-6
         self.L_borehole = L_borehole
         self.D_borehole = D_borehole
         self.borehole_spacing = borehole_spacing
         self.E_annual = E_annual
-        self.monthly_extraction = monthly_extraction
-        self.monthly_injection = monthly_injection
+        self.monthly_fractions = monthly_fractions
+        self.num_years = num_years
 
     def __str__(self):
-        extraction_fraction, injection_fraction = np.sum(self.monthly_extraction), np.sum(self.monthly_injection)
-        extraction_amount, injection_amount = np.round(extraction_fraction*self.E_annual,3), np.round(injection_fraction*self.E_annual,3)
-        extraction_percentage, injection_percentage = np.round(100.0*extraction_fraction,3), np.round(100.0*injection_fraction,3)
-        return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, E_annual={str(round(self.E_annual,3))} MWh, extraction={str(extraction_amount)} MWh ({extraction_percentage}%), injection={str(injection_amount)} MWh ({injection_percentage}%)"
+        monthly_fractions = ", ".join([str(fraction) for fraction in self.monthly_fractions]).replace(".0", "")
+        return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, E_annual={str(round(self.E_annual,3))} MWh, monthly_fractions=[{monthly_fractions}], num_years={self.num_years})"
 
 
 def init_model(client, params, geology):
-    """Constructs a new COMSOL model using the specified client having the specified parameters
-    for simulating heat extraction and injection to and from the specified geology."""
+    """Constructs a new COMSOL model using the specified client having the specified parameters for simulating heat extraction from the specified geology."""
     
     # Creates a new COMSOL model.
     
@@ -115,31 +110,16 @@ def init_model(client, params, geology):
     pieces = []
     
     for i in range(12):
-        pieces.append([f"{i}/12", f"{i+1}/12", f"{params.monthly_extraction[i]}"])
+        pieces.append([f"{i}/12", f"{i+1}/12", f"{params.monthly_fractions[i]}"])
         
     model.func().create("pw2", "Piecewise")
-    model.func("pw2").set("funcname", "monthly_extraction")
+    model.func("pw2").set("funcname", "monthly_fractions")
     model.func("pw2").set("arg", "t")
     model.func("pw2").set("extrap", "periodic")
     model.func("pw2").set("pieces", pieces)
     model.func("pw2").set("argunit", "a")
     model.func("pw2").set("fununit", "1")
 
-    # Creates monthly heat injection profile function.
-
-    pieces = []
-    
-    for i in range(12):
-        pieces.append([f"{i}/12", f"{i+1}/12", f"{params.monthly_injection[i]}"])
-    
-    model.func().create("pw3", "Piecewise")
-    model.func("pw3").set("funcname", "monthly_injection")
-    model.func("pw3").set("arg", "t")
-    model.func("pw3").set("extrap", "periodic")
-    model.func("pw3").set("pieces", pieces)
-    model.func("pw3").set("argunit", "a")
-    model.func("pw3").set("fununit", "1")
-    
     toc = time.time()
     
     print(f"Done in {str(np.round(toc-tic,3))} seconds.")
@@ -253,29 +233,66 @@ def init_model(client, params, geology):
     
     model.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
     model.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").create("size1", "Size")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("custom", "on")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hmax", "10[mm]")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hmaxactive", "on")
+
+    # model.component("comp1").mesh("mesh1").feature("collar_edge").create("dis1", "Distribution")
+    # model.component("comp1").mesh("mesh1").feature("collar_edge").feature("dis1").set("numelem", "10")
+
+    model.component("comp1").mesh("mesh1").feature("collar_edge").create('size1', 'Size');
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").label('Edge Size');
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('custom', 'on');
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmaxactive', "on");
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hminactive', "on");
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmin', '5[mm]'); # <--- minimum segment size
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmax', '5[mm]'); # <--- maximum segment size
     
     model.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri")
     model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create("size1", "Size")
     model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hauto", "1")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("custom", "on")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgrad", "1.1")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgradactive", "on")
+
+    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create("size1", "Size")
+    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("custom", "on")
+    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hauto", "1")
+    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgradactive", "on")
+    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgrad", "1.1")
+
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create('size1', 'Size');
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hauto', "1");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('custom', 'on');
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hminactive', "on");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmaxactive', "on");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgradactive', "on");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmin', '1[mm]'); # <--- minimum element size
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmax', '5[m]'); # <--- maximum element size
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgrad', "1.2"); # <--- element growth rate
     
     model.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().geom("geom1", 3)
     model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution");
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "10");
+
+    # model.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution");
+    # model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "30");
+
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").create('dist1', 'Distribution');
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('type', 'predefined');
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('method', 'geometric');
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('symmetric', "on");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('elemcount', "20");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('elemratio', "30");
     
     model.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create("size1", "Size")
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hauto", "2")
+
+    # model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create("size1", "Size")
+    # model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hauto", "2")
+
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create('size1', 'Size');
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hauto', "1");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('custom', 'on');
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmaxactive', "on");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hminactive', "on");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgrad', "1.2"); # <--- element growth rate
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmin', '1[mm]'); # <--- minimum element size
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmax', '10[m]'); # <--- maximum element size
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on");
     
     model.component("comp1").mesh("mesh1").run()
     
@@ -290,7 +307,6 @@ def init_model(client, params, geology):
     tic = time.time()
 
     model.component("comp1").physics().create("ht", "HeatTransfer", "geom1")
-    
     model.component("comp1").physics("ht").prop("ShapeProperty").set("order_temperature", "1")
     
     model.component("comp1").physics("ht").feature("init1").set("Tinit", "T_initial(z)")
@@ -308,21 +324,21 @@ def init_model(client, params, geology):
         model.component("comp1").physics("ht").feature(tag).set("Cp_mat", "userdef")
         model.component("comp1").physics("ht").feature(tag).set("Cp", f"Cp_{layer.tag}")
     
-    model.component("comp1").physics("ht").create("temp1", "TemperatureBoundary", 2)
-    model.component("comp1").physics("ht").feature("temp1").label("Ground Surface Temperature")
-    model.component("comp1").physics("ht").feature("temp1").selection().named("ground_surface_selection")
-    model.component("comp1").physics("ht").feature("temp1").set("T0", "T_surface")
+    model.component("comp1").physics("ht").create("ground_surface_temperature", "TemperatureBoundary", 2)
+    model.component("comp1").physics("ht").feature("ground_surface_temperature").label("Ground Surface Temperature")
+    model.component("comp1").physics("ht").feature("ground_surface_temperature").selection().named("ground_surface_selection")
+    model.component("comp1").physics("ht").feature("ground_surface_temperature").set("T0", "T_surface")
     
-    model.component("comp1").physics("ht").create("hf1", "HeatFluxBoundary", 2)
-    model.component("comp1").physics("ht").feature("hf1").label("Geothermal Heat Flux")
-    model.component("comp1").physics("ht").feature("hf1").selection().named("bottom_boundary_selection")
-    model.component("comp1").physics("ht").feature("hf1").set("q0", "q_geothermal")
-    model.component("comp1").physics("ht").feature("hf1").set("materialType", "solid")
+    model.component("comp1").physics("ht").create("geothermal_heat_flux", "HeatFluxBoundary", 2)
+    model.component("comp1").physics("ht").feature("geothermal_heat_flux").label("Geothermal Heat Flux")
+    model.component("comp1").physics("ht").feature("geothermal_heat_flux").selection().named("bottom_boundary_selection")
+    model.component("comp1").physics("ht").feature("geothermal_heat_flux").set("q0", "q_geothermal")
+    model.component("comp1").physics("ht").feature("geothermal_heat_flux").set("materialType", "solid")
     
-    model.component("comp1").physics("ht").create("hf2", "HeatFluxBoundary", 2)
-    model.component("comp1").physics("ht").feature("hf2").label("Borehole Wall Heat Flux")
-    model.component("comp1").physics("ht").feature("hf2").selection().named("borehole_wall_selection")
-    model.component("comp1").physics("ht").feature("hf2").set("q0", "(Q_injection-Q_extraction)/A_wall")
+    model.component("comp1").physics("ht").create("borehole_wall_heat_flux", "HeatFluxBoundary", 2)
+    model.component("comp1").physics("ht").feature("borehole_wall_heat_flux").label("Borehole Wall Heat Flux")
+    model.component("comp1").physics("ht").feature("borehole_wall_heat_flux").selection().named("borehole_wall_selection")
+    model.component("comp1").physics("ht").feature("borehole_wall_heat_flux").set("q0", "-Q_extraction/A_wall")
     
     toc = time.time()
     
@@ -340,10 +356,10 @@ def init_model(client, params, geology):
     model.component("comp1").cpl("borehole_wall_integration").selection().geom("geom1", 2)
     model.component("comp1").cpl("borehole_wall_integration").selection().named("borehole_wall_selection")
     
-    # model.component("comp1").cpl().create("borehole_wall_minimum", "Minimum")
-    # model.component("comp1").cpl("borehole_wall_minimum").label("Borehole Wall Minimum")
-    # model.component("comp1").cpl("borehole_wall_minimum").selection().geom("geom1", 2)
-    # model.component("comp1").cpl("borehole_wall_minimum").selection().named("borehole_wall_selection")
+    model.component("comp1").cpl().create("borehole_wall_minimum", "Minimum")
+    model.component("comp1").cpl("borehole_wall_minimum").label("Borehole Wall Minimum")
+    model.component("comp1").cpl("borehole_wall_minimum").selection().geom("geom1", 2)
+    model.component("comp1").cpl("borehole_wall_minimum").selection().named("borehole_wall_selection")
     
     model.component("comp1").cpl().create("borehole_wall_average", "Average")
     model.component("comp1").cpl("borehole_wall_average").label("Borehole Wall Average")
@@ -351,11 +367,10 @@ def init_model(client, params, geology):
     model.component("comp1").cpl("borehole_wall_average").selection().named("borehole_wall_selection")
 
     model.component("comp1").variable().create("var1")
-    # model.component("comp1").variable("var1").set("T_min", "borehole_wall_minimum(T)")
+    model.component("comp1").variable("var1").set("T_min", "borehole_wall_minimum(T)")
     model.component("comp1").variable("var1").set("T_ave", "borehole_wall_average(T)")
     model.component("comp1").variable("var1").set("Q_wall", "4*borehole_wall_integration(ht.ndflux)")
-    model.component("comp1").variable("var1").set("Q_extraction", "(E_annual*monthly_extraction(t))/(1[a]/12)")
-    model.component("comp1").variable("var1").set("Q_injection", "(E_annual*monthly_injection(t))/(1[a]/12)")
+    model.component("comp1").variable("var1").set("Q_extraction", "(E_annual*monthly_fractions(t))/(1[a]/12)")
     
     toc = time.time()
     
@@ -367,7 +382,7 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-    tlist = "range(0,1/12,30)"
+    tlist = f"range(0,1/36,{params.num_years})"
 
     model.study().create("std1")
     model.study("std1").create("time", "Transient")

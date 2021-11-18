@@ -15,29 +15,36 @@ def time_elapsed(seconds):
         return f"{minutes}m"
     return f"{minutes}m{seconds}s"
 
-monthly_extraction = np.array([0.155, 0.148, 0.125, 0.099, 0.064, 0.000, 0.000, 0.000, 0.061, 0.087, 0.117, 0.144])
-monthly_injection = np.array([0, 0, 0, 0, 0, 0.250, 0.500, 0.250, 0, 0, 0, 0]) / 5
-
-params = Parameters(L_borehole=110, D_borehole=0.110, borehole_spacing=500, E_annual=16.2, monthly_extraction=monthly_extraction, monthly_injection=monthly_injection)
-
-material = Material("Rock Material", 3.5, 800, 2700)
-
-geology = Geology("Bedrock Geology", 8, 0.06, [Layer("Bedrock Layer", 0, -1000, material)])
-
-print(params) # 19.6
-
-model = init_model(mph.start(), params, geology)
-
 def cost_function(E_annual):
     tic = time.time()
     model.parameter("E_annual", f"{E_annual}[MWh]")
     model.solve()
-    T_ave = model.evaluate("T_ave", "degC")
-    cost = np.abs(np.min(T_ave))
+    # T_ave = model.evaluate("T_ave", "degC")
+    # cost = np.abs(np.min(T_ave))
+    T_min = model.evaluate("T_min", "degC")
+    cost = np.abs(np.min(T_min))
     toc = time.time()
     print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={E_annual:.3f} MWh, cost={cost:.6f} K")
     return cost
 
-result = minimize_scalar(cost_function, method="bounded", bounds=[5, 50], options={"disp": True})
+if __name__ == "__main__":
 
-print(result)
+    monthly_fractions = np.array([0.177, 0.111, 0.111, 0.082, 0.044, 0.037, 0.032, 0.034, 0.044, 0.086, 0.119, 0.123])
+    
+    params = Parameters(L_borehole=300, D_borehole=0.140, borehole_spacing=20, E_annual=38.1966, monthly_fractions=monthly_fractions, num_years=50)
+
+    print(params)
+    
+    material = Material("Granite", k=3.71, Cp=708, rho=2684)
+
+    print(material)
+
+    geology = Geology("Bedrock", T_surface=6.658702305, q_geothermal=44.22149184e-3, layers=[Layer("Rock", 0, -1000, material)])
+
+    print(geology)
+
+    model = init_model(mph.start(), params, geology)
+
+    result = minimize_scalar(cost_function, method="bounded", bounds=[0, 100], tol=0.001, options={"disp": True})
+    
+    print(result)
