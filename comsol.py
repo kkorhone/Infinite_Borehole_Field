@@ -5,19 +5,21 @@ import time
 class Parameters:
     """This class is used to store parameters regarding the borehole and heat extraction from it."""
     
-    def __init__(self, L_borehole, D_borehole, borehole_spacing, E_annual, monthly_fractions, num_years):
-        assert len(monthly_fractions) == 12
-        assert np.abs(np.sum(monthly_fractions)-1) < 1e-6
+    def __init__(self, L_borehole, D_borehole, borehole_spacing, num_years, E_annual, monthly_fractions=None):
+        if monthly_fractions is not None:
+            assert len(monthly_fractions) == 12 and np.abs(np.sum(monthly_fractions)-1) < 1e-6
         self.L_borehole = L_borehole
         self.D_borehole = D_borehole
         self.borehole_spacing = borehole_spacing
+        self.num_years = num_years
         self.E_annual = E_annual
         self.monthly_fractions = monthly_fractions
-        self.num_years = num_years
 
     def __str__(self):
-        monthly_fractions = ", ".join([str(fraction) for fraction in self.monthly_fractions]).replace(".0", "")
-        return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, E_annual={str(round(self.E_annual,3))} MWh, monthly_fractions=[{monthly_fractions}], num_years={self.num_years})"
+        if self.monthly_fractions is not None:
+            monthly_fractions = ", ".join([str(fraction) for fraction in self.monthly_fractions]).replace(".0", "")
+            return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, num_years={self.num_years}, E_annual={str(round(self.E_annual,3))} MWh, monthly_fractions=[{monthly_fractions}])"
+        return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, num_years={self.num_years}, E_annual={str(round(self.E_annual,3))} MWh)"
 
 
 def init_model(client, params, geology):
@@ -105,20 +107,22 @@ def init_model(client, params, geology):
     model.func("pw1").set("argunit", "m")
     model.func("pw1").set("fununit", "K")
     
-    # Creates monthly heat extraction profile function.
-        
-    pieces = []
+    # Creates a monthly profile function if monthly fractions have been defined.
     
-    for i in range(12):
-        pieces.append([f"{i}/12", f"{i+1}/12", f"{params.monthly_fractions[i]}"])
+    if params.monthly_fractions is not None:
         
-    model.func().create("pw2", "Piecewise")
-    model.func("pw2").set("funcname", "monthly_fractions")
-    model.func("pw2").set("arg", "t")
-    model.func("pw2").set("extrap", "periodic")
-    model.func("pw2").set("pieces", pieces)
-    model.func("pw2").set("argunit", "a")
-    model.func("pw2").set("fununit", "1")
+        pieces = []
+        
+        for i in range(12):
+            pieces.append([f"{i}/12", f"{i+1}/12", f"{params.monthly_fractions[i]}"])
+            
+        model.func().create("pw2", "Piecewise")
+        model.func("pw2").set("funcname", "monthly_fractions")
+        model.func("pw2").set("arg", "t")
+        model.func("pw2").set("extrap", "periodic")
+        model.func("pw2").set("pieces", pieces)
+        model.func("pw2").set("argunit", "a")
+        model.func("pw2").set("fununit", "1")
 
     toc = time.time()
     
@@ -232,67 +236,53 @@ def init_model(client, params, geology):
     tic = time.time()
     
     model.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
+    model.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh")
     model.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
 
-    # model.component("comp1").mesh("mesh1").feature("collar_edge").create("dis1", "Distribution")
-    # model.component("comp1").mesh("mesh1").feature("collar_edge").feature("dis1").set("numelem", "10")
-
     model.component("comp1").mesh("mesh1").feature("collar_edge").create('size1', 'Size');
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").label('Edge Size');
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('custom', 'on');
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmaxactive', "on");
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hminactive', "on");
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmin', '5[mm]'); # <--- minimum segment size
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmax', '5[mm]'); # <--- maximum segment size
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('custom', 'on')
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmaxactive', "on")
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmax', '5[mm]')
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hminactive', "on")
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmin', '5[mm]')
     
     model.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri")
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").label("Ground Surface Mesh")
     model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection")
     model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del")
 
-    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create("size1", "Size")
-    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("custom", "on")
-    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hauto", "1")
-    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgradactive", "on")
-    # model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgrad", "1.1")
-
     model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create('size1', 'Size');
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hauto', "1");
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('custom', 'on');
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hminactive', "on");
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmaxactive', "on");
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgradactive', "on");
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmin', '1[mm]'); # <--- minimum element size
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmax', '5[m]'); # <--- maximum element size
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgrad', "1.2"); # <--- element growth rate
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hauto', "1")
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('custom', 'on')
+    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hminactive', "on")
+    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmin', '1[mm]')
+    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmaxactive', "on")
+    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmax', '5[m]')
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgradactive', "on")
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgrad', "1.1")
     
     model.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep")
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh")
     model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
 
-    # model.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution");
-    # model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "30");
-
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").create('dist1', 'Distribution');
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('type', 'predefined');
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('method', 'geometric');
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('symmetric', "on");
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('elemcount', "20");
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dist1").set('elemratio', "30");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").create('dis1', 'Distribution')
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('type', 'predefined')
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('method', 'geometric')
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('symmetric', "on")
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemcount', "30")
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemratio', "10")
     
     model.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
 
-    # model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create("size1", "Size")
-    # model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hauto", "2")
-
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create('size1', 'Size');
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hauto', "1");
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('custom', 'on');
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmaxactive', "on");
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hminactive', "on");
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on");
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgrad', "1.2"); # <--- element growth rate
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmin', '1[mm]'); # <--- minimum element size
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmax', '10[m]'); # <--- maximum element size
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create('size1', 'Size')
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hauto', "1")
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('custom', 'on')
+    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hminactive', "on")
+    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmin', '1[mm]')
+    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmaxactive', "on")
+    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmax', '10[m]')
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on")
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgrad', "1.1")
     
     model.component("comp1").mesh("mesh1").run()
     
@@ -370,7 +360,11 @@ def init_model(client, params, geology):
     model.component("comp1").variable("var1").set("T_min", "borehole_wall_minimum(T)")
     model.component("comp1").variable("var1").set("T_ave", "borehole_wall_average(T)")
     model.component("comp1").variable("var1").set("Q_wall", "4*borehole_wall_integration(ht.ndflux)")
-    model.component("comp1").variable("var1").set("Q_extraction", "(E_annual*monthly_fractions(t))/(1[a]/12)")
+    
+    if params.monthly_fractions is not None:
+        model.component("comp1").variable("var1").set("Q_extraction", "(E_annual*monthly_fractions(t))/(1[a]/12)")
+    else:
+        model.component("comp1").variable("var1").set("Q_extraction", "E_annual/1[a]")
     
     toc = time.time()
     
@@ -382,7 +376,7 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-    tlist = f"range(0,1/36,{params.num_years})"
+    tlist = f"range(0,1/12,{params.num_years})"
 
     model.study().create("std1")
     model.study("std1").create("time", "Transient")
