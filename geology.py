@@ -4,15 +4,22 @@ import numpy as np
 class Material:
     """This class is used to store physical properties of materials."""
 
-    def __init__(self, name, k, Cp, rho):
+    def __init__(self, name, k, Cp, rho, porosity=0):
+        if porosity < 0 or porosity >= 1:
+            raise ValueError("Porosity must be >= 0 and < 1.")
         self.name = " ".join([token.capitalize() for token in name.split()])
-        self.k = k # Thermal conductivity
-        self.Cp = Cp # Specific heat capacity
-        self.rho = rho # Density
-        self.C = rho * Cp # Volumetric heat capacity
-        
+        if porosity > 0:
+            self.k = (1.0 - porosity) * k + porosity * 0.6
+            self.rho = (1.0 - porosity) * rho + porosity * 1000
+            self.Cp = (1.0 - porosity) * (rho * Cp + porosity * 1000 * 4186) / self.rho
+        else:
+            self.k = k
+            self.Cp = Cp
+            self.rho = rho
+        self.C = self.rho * self.Cp
+
     def __str__(self):
-        return f"Material(name={self.name}, k={self.k} W/(m*K), Cp={self.Cp} J/(kg*K), rho={self.rho} kg/m^3, C={self.C/1000000} MJ/(m^3*K))"
+        return f"Material(name={self.name}, k={self.k} W/(m\xb7K), Cp={self.Cp} J/(kg\xb7K), rho={self.rho} kg/m\xb3, C={self.C/1000000} MJ/(m\xb3\xb7K))"
 
 
 class Geology:
@@ -56,36 +63,27 @@ class Geology:
 
     def __str__(self):
         layers = ", ".join([f"{layer.name} ({str(np.round(layer.thickness,3))} m)" for layer in self.layers])
-        return f"Geology(name={self.name}, T_surface={self.T_surface} degC, q_geothermal={1000*self.q_geothermal} mW/m^2, thickness={self.thickness} m, layers=[{layers}])"
+        return f"Geology(name={self.name}, T_surface={self.T_surface} \xb0C, q_geothermal={1000*self.q_geothermal} mW/m\xb2, thickness={self.thickness} m, layers=[{layers}])"
         
 
 class Layer:
     """This class represents a geological layer with a material and vertical extent."""
     
-    def __init__(self, name, z_from, z_to, matrix_material, fluid_material=None, porosity=0):
+    def __init__(self, name, material, z_from, z_to):
         if z_to > z_from:
             raise ValueError("The top of the layer must be located above its bottom.")
-        if porosity < 0 or porosity >= 1:
-            raise ValueError("The porosity of the layer must be >= 0 and < 1.")
         self.name = " ".join([token.capitalize() for token in name.split()])
         self.tag = name.lower().replace(" ", "_")
+        self.material = material
         self.z_from = z_from
         self.z_to = z_to
         self.thickness = z_from - z_to
-        if porosity > 0:
-            k_effective = (1.0 - porosity) * matrix_material.k + porosity * fluid_material.k
-            rho_effective = (1.0 - porosity) * matrix_material.rho + porosity * fluid_material.rho
-            Cp_effective = (1.0 - porosity) * (matrix_material.C + porosity * fluid_material.C) / rho_effective
-            name = f"Porous {matrix_material.name}"
-            self.material = Material(name, k_effective, rho_effective, Cp_effective)
-        else:
-            self.material = matrix_material
             
     def split(self, z):
         """Splits this layer into two parts that are located above and below the specified depth."""
         if self.z_to < z and z < self.z_from:
-            above = Layer(f"{self.name} (Upper Half)", self.z_from, z, self.material)
-            below = Layer(f"{self.name} (Lower Half)", z, self.z_to, self.material)
+            above = Layer(f"{self.name} (Upper Half)", self.material, self.z_from, z)
+            below = Layer(f"{self.name} (Lower Half)", self.material, z, self.z_to)
             return [above, below]
         else:
             return [self]

@@ -7,7 +7,10 @@ class Parameters:
     
     def __init__(self, L_borehole, D_borehole, borehole_spacing, num_years, E_annual, monthly_fractions=None):
         if monthly_fractions is not None:
-            assert len(monthly_fractions) == 12 and np.abs(np.sum(monthly_fractions)-1) < 1e-6
+            if not len(monthly_fractions) == 12:
+                raise ValueError("There must be 12 monthly fractions.")
+            if np.abs(np.sum(monthly_fractions)-1) > 1e-6:
+                raise ValueError("The sum of monthly fractions must be 1.")
         self.L_borehole = L_borehole
         self.D_borehole = D_borehole
         self.borehole_spacing = borehole_spacing
@@ -290,6 +293,10 @@ def init_model(client, params, geology):
     
     print(f"Done in {str(np.round(toc-tic,3))} seconds.")
 
+    num_elems = model.component("comp1").mesh("mesh1").stat().getNumElem()
+    
+    print(f"Number of elements: {num_elems:,}")
+
     # Creates physics.
     
     print("Creating physics...", end=" ")
@@ -375,33 +382,47 @@ def init_model(client, params, geology):
     print("Creating solution and solver...", end=" ")
 
     tic = time.time()
-
+    
     tlist = f"range(0,1/12,{params.num_years})"
 
     model.study().create("std1")
+
+    model.study("std1").setGenPlots(False)
+    model.study("std1").setGenConv(False)
+
     model.study("std1").create("time", "Transient")
     model.study("std1").feature("time").set("tunit", "a")
     model.study("std1").feature("time").set("tlist", tlist)
+
+    if params.monthly_fractions is not None:
+        model.study("std1").feature("time").set("usertol", "on");
+        model.study("std1").feature("time").set("rtol", "1e-3");
     
     model.sol().create("sol1")
     model.sol("sol1").study("std1")
     model.sol("sol1").attach("std1")
+
     model.sol("sol1").create("st1", "StudyStep")
+
     model.sol("sol1").create("v1", "Variables")
-    # model.sol("sol1").feature("v1").set("clist", [tlist, "1e-6[a]"])
+
     model.sol("sol1").create("t1", "Time")
     model.sol("sol1").feature("t1").create("d1", "Direct")
     model.sol("sol1").feature("t1").feature("d1").set("linsolver", "pardiso")
-    # model.sol("sol1").feature("t1").feature("d1").set("pivotperturb", "1.0e-13")
     model.sol("sol1").feature("t1").feature().remove("dDef")
     model.sol("sol1").feature("t1").feature().remove("fcDef")
-    model.sol("sol1").feature("t1").set("tstepsbdf", "strict")
     model.sol("sol1").feature("t1").set("tunit", "a")
     model.sol("sol1").feature("t1").set("tlist", tlist)
-    # model.sol("sol1").feature("t1").set("tout", "tsteps")
     model.sol("sol1").feature("t1").set("maxorder", "2")
     model.sol("sol1").feature("t1").set("estrat", "exclude")
     model.sol("sol1").feature("t1").set("control", "time")
+
+    if params.monthly_fractions is not None:
+        model.sol("sol1").feature("t1").set("tstepsbdf", "free")
+        model.sol("sol1").feature("t1").set("initialstepbdfactive", "on")
+        model.sol("sol1").feature("t1").set("initialstepbdf", "1e-6")
+    else:
+        model.sol("sol1").feature("t1").set("tstepsbdf", "strict")
     
     toc = time.time()
     
@@ -440,5 +461,11 @@ def init_model(client, params, geology):
     # toc = time.time()
     
     # print(f"Done in {str(np.round(toc-tic,3))} seconds.")
-
+    
+    xmi = model.sol("sol1").feature("st1").xmeshInfo()
+    
+    num_dofs = xmi.nDofs()
+    
+    print(f"Number of degrees of freedom: {num_dofs:,}")
+    
     return python_model
