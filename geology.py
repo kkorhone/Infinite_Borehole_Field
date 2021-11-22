@@ -82,8 +82,8 @@ class Layer:
     def split(self, z):
         """Splits this layer into two parts that are located above and below the specified depth."""
         if self.z_to < z and z < self.z_from:
-            above = Layer(f"{self.name} (Upper Half)", self.material, self.z_from, z)
-            below = Layer(f"{self.name} (Lower Half)", self.material, z, self.z_to)
+            above = Layer(f"Upper Part of {self.name}", self.material, self.z_from, z)
+            below = Layer(f"Lower Part of {self.name}", self.material, z, self.z_to)
             return [above, below]
         else:
             return [self]

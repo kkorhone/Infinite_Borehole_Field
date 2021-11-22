@@ -131,3 +131,10 @@ dmypy.json
 # COMSOL models
 *.mph
 *.lock
+
+# Java files
+*.java
+*.class
+
+# MATLAB files
+*.m

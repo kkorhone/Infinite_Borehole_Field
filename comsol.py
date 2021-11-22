@@ -238,55 +238,87 @@ def init_model(client, params, geology):
     
     tic = time.time()
     
-    model.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
-
-    model.component("comp1").mesh("mesh1").feature("collar_edge").create('size1', 'Size');
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('custom', 'on')
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmaxactive', "on")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmax', '5[mm]')
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hminactive', "on")
-    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmin', '5[mm]')
+#    model.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh")
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
+#
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").create('size1', 'Size');
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('custom', 'on')
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmaxactive', "on")
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmax', '5[mm]')
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hminactive', "on")
+#    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set('hmin', '5[mm]')
+#    
+#    model.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri")
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").label("Ground Surface Mesh")
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection")
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del")
+#
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create('size1', 'Size');
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hauto', "1")
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('custom', 'on')
+#    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hminactive', "on")
+#    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmin', '1[mm]')
+#    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmaxactive', "on")
+#    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmax', '5[m]')
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgradactive', "on")
+#    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgrad', "1.1")
+#    
+#    model.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep")
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh")
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
+#
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").create('dis1', 'Distribution')
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('type', 'predefined')
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('method', 'geometric')
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('symmetric', "on")
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemcount', "30")
+#    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemratio', "10")
+#    
+#    model.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
+#
+#    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create('size1', 'Size')
+#    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hauto', "1")
+#    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('custom', 'on')
+#    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hminactive', "on")
+#    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmin', '1[mm]')
+#    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmaxactive', "on")
+#    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmax', '10[m]')
+#    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on")
+#    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgrad', "1.1")
     
-    model.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").label("Ground Surface Mesh")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del")
+    model.component("comp1").mesh("mesh1").create("collar_edge", "Edge");
+    model.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection");
+    model.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh");
 
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create('size1', 'Size');
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hauto', "1")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('custom', 'on')
-    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hminactive', "on")
-    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmin', '1[mm]')
-    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmaxactive', "on")
-    #model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hmax', '5[m]')
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgradactive', "on")
-    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set('hgrad', "1.1")
-    
-    model.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
+    model.component("comp1").mesh("mesh1").feature("collar_edge").create("dis1", "Distribution");
+    model.component("comp1").mesh("mesh1").feature("collar_edge").feature("dis1").set("numelem", "10");
 
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").create('dis1', 'Distribution')
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('type', 'predefined')
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('method', 'geometric')
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('symmetric', "on")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemcount', "30")
-    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set('elemratio', "10")
-    
-    model.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
+    model.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").label("Ground Surface Mesh");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del");
 
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create('size1', 'Size')
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hauto', "1")
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('custom', 'on')
-    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hminactive', "on")
-    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmin', '1[mm]')
-    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmaxactive', "on")
-    #model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hmax', '10[m]')
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgradactive', "on")
-    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set('hgrad', "1.1")
-    
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create("size1", "Size");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("custom", "on");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgradactive", "on");
+    model.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgrad", "1.2");
+
+    model.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh");
+
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution");
+    model.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "10");
+
+    model.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet");
+
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create("size1", "Size");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hauto", "1");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("custom", "on");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hgrad", "1.1");
+    model.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hgradactive", "on");
+
     model.component("comp1").mesh("mesh1").run()
     
     toc = time.time()

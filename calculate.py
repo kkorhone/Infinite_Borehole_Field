@@ -1,6 +1,7 @@
 from geology import Material, Geology, Layer
 from scipy.optimize import minimize_scalar
 from comsol import Parameters, init_model
+import pandas as pd
 import numpy as np
 import time
 import mph
@@ -56,32 +57,34 @@ if __name__ == "__main__":
     geology8.add_layers([Layer("Miocene", miocene, 0, -351.0), Layer("upper_oligocene", upper_oligocene, -351.0, -600), Layer("lower_oligocene", lower_oligocene, -600, -1025),Layer("eocene", eocene,-1025, -1240.0), Layer("triassic", triassic,-1240.0, -1304.5)])
     geology9.add_layers([Layer("Miocene", miocene, 0, -347.3), Layer("upper_oligocene", upper_oligocene, -347.3, -580), Layer("lower_oligocene", lower_oligocene, -580, -1027),Layer("eocene", eocene,-1027, -1228.4), Layer("triassic", triassic,-1228.4, -1270.0)])
 
-    client = mph.start()
-    
-    # Evaluates single-borehole potentials...
-    
-    params = Parameters(L_borehole=150, D_borehole=0.150, borehole_spacing=20, E_annual=30, num_years=50, monthly_fractions=monthly_fractions)
-    
-    for geology in [geology1, geology2, geology3, geology4, geology5, geology6, geology7, geology8, geology9]:
-        
-        print(geology)
-        
-        model = init_model(client, params, geology)
-        
-        result = minimize_scalar(lambda x: cost_function(model,x), method="bounded", bounds=[0, 100], options={"disp": True, "xatol": 0.001})
-        
-        print(result)
+    geology = [geology1, geology2, geology3, geology4, geology5, geology6, geology7, geology8, geology9]
 
-    # Evaluates borehole field potentials...
+    # Evaluates borehole the potentials...
     
-    params = Parameters(L_borehole=150, D_borehole=0.150, borehole_spacing=1000, E_annual=30, num_years=50, monthly_fractions=monthly_fractions)
+    data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "cost"])
     
-    for geology in [geology1, geology2, geology3, geology4, geology5, geology6, geology7, geology8, geology9]:
+    L_borehole = [150, 300]
+    borehole_spacing = [20, 500]
+    
+    options = {"disp": True, "xatol": 0.001}
+    
+    client = mph.start(cores=8)
+
+    for i in range(len(borehole_spacing)):
+        for j in range(len(L_borehole)):
+            
+            bounds = [1, L_borehole[j]/50*10]
+            
+            params = Parameters(L_borehole=L_borehole[j], D_borehole=0.150, borehole_spacing=borehole_spacing[i], E_annual=30, num_years=50, monthly_fractions=monthly_fractions)
+            
+            for k in range(len(geology)):
+    
+                model = init_model(client, params, geology[k])
         
-        print(geology)
+                result = minimize_scalar(lambda x: cost_function(model,x), method="bounded", bounds=bounds, options=options)
+                
+                data_frame.loc[len(data_frame)] = [geology[k].name, L_borehole[j], borehole_spacing[i], result.x, result.fun]
         
-        model = init_model(client, params, geology)
-        
-        result = minimize_scalar(lambda x: cost_function(model,x), method="bounded", bounds=[0, 100], options={"disp": True, "xatol": 0.001})
-        
-        print(result)
+                print(f"geology={geology[k].name}, L_borehole={params.L_borehole} m, borehole_spacing={params.borehole_spacing} m, E_annual={result.x} MWh, cost={result.fun} K")
+
+                data_frame.to_excel("results.xlsx")
