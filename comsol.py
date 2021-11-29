@@ -426,7 +426,7 @@ def init_model(client, params, geology):
     model.study("std1").feature("time").set("tunit", "a")
     model.study("std1").feature("time").set("tlist", tlist)
 
-    if params.monthly_fractions is not None:
+    if params.monthly_fractions is None:
         model.study("std1").feature("time").set("usertol", "on");
         model.study("std1").feature("time").set("rtol", "1e-3");
     
@@ -449,7 +449,7 @@ def init_model(client, params, geology):
     model.sol("sol1").feature("t1").set("estrat", "exclude")
     model.sol("sol1").feature("t1").set("control", "time")
 
-    if params.monthly_fractions is not None:
+    if params.monthly_fractions is None:
         model.sol("sol1").feature("t1").set("tstepsbdf", "free")
         model.sol("sol1").feature("t1").set("initialstepbdfactive", "on")
         model.sol("sol1").feature("t1").set("initialstepbdf", "1e-6")
