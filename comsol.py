@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import os
 
 
 class Parameters:
@@ -25,6 +26,43 @@ class Parameters:
         return f"Parameters(L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, num_years={self.num_years}, E_annual={str(round(self.E_annual,3))} MWh)"
 
 
+def time_elapsed(seconds):
+    """Formats seconds as XmXs."""
+    seconds = int(np.floor(seconds))
+    minutes = seconds // 60
+    seconds %= 60
+    if minutes == 0:
+        return f"{seconds}s"
+    elif seconds == 0:
+        return f"{minutes}m"
+    return f"{minutes}m{seconds}s"
+
+
+def save_model(model, base_name="temp"):
+    """Saves the specified model to disk."""
+    for i in range(1000):
+        file_name = f"{base_name.lower()}{i:03d}.mph"
+        if os.path.exists(file_name):
+            print(f"File '{file_name}' already exists.")
+        else:
+            model.save(file_name)
+            print(f"Saved model to file '{file_name}'.")
+            return
+    raise ValueError(f"Unable to save model using base name '{base_name.lower()}'.")
+
+
+def eval_temp(model, E_annual):
+    """Evaluates the coldest mean borehole wall temperature during the simulation."""
+    tic = time.time()
+    model.parameter("E_annual", f"{E_annual}[MWh]")
+    model.solve()
+    T_ave = model.evaluate("T_ave", "degC")
+    temp = np.min(T_ave)
+    toc = time.time()
+    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={E_annual:.3f} MWh, temp={temp:.6f} K")
+    return temp
+
+
 def init_model(client, params, geology):
     """Constructs a new COMSOL model using the specified client having the specified parameters for simulating heat extraction from the specified geology."""
     
@@ -46,7 +84,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Sets up model parameters.
     
@@ -65,7 +103,12 @@ def init_model(client, params, geology):
         model.param().set(f"k_{layer.tag}", f"{layer.material.k}[W/(m*K)]")
         model.param().set(f"Cp_{layer.tag}", f"{layer.material.Cp}[J/(kg*K)]")
         model.param().set(f"rho_{layer.tag}", f"{layer.material.rho}[kg/m^3]")
-    
+
+    if geology.has_porous_layers:
+        model.param().set("k_water", "0.6[W/(m*K)]");
+        model.param().set("Cp_water", "4186[J/(kg*K)]");
+        model.param().set("rho_water", "1000[kg/m^3]");
+
     model.param().set("T_surface", f"{geology.T_surface}[degC]")
     model.param().set("q_geothermal", f"{geology.q_geothermal}[W/m^2]")
     
@@ -75,7 +118,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Creates initial temperature function.
     
@@ -129,7 +172,7 @@ def init_model(client, params, geology):
 
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Creates model geometry.
     
@@ -162,7 +205,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Creates selections.
     
@@ -177,12 +220,12 @@ def init_model(client, params, geology):
     model.component("comp1").selection("ground_surface_selection").set("zmax", "0")
     model.component("comp1").selection("ground_surface_selection").set("condition", "allvertices")
     
-    model.component("comp1").selection().create("bottom_boundary_selection", "Box")
-    model.component("comp1").selection("bottom_boundary_selection").label("Bottom Boundary Selection")
-    model.component("comp1").selection("bottom_boundary_selection").set("entitydim", "2")
-    model.component("comp1").selection("bottom_boundary_selection").set("zmin", f"{-geology.thickness}")
-    model.component("comp1").selection("bottom_boundary_selection").set("zmax", f"{-geology.thickness}")
-    model.component("comp1").selection("bottom_boundary_selection").set("condition", "allvertices")
+    model.component("comp1").selection().create("geothermal_boundary_selection", "Box")
+    model.component("comp1").selection("geothermal_boundary_selection").label("Bottom Boundary Selection")
+    model.component("comp1").selection("geothermal_boundary_selection").set("entitydim", "2")
+    model.component("comp1").selection("geothermal_boundary_selection").set("zmin", f"{-geology.thickness}")
+    model.component("comp1").selection("geothermal_boundary_selection").set("zmax", f"{-geology.thickness}")
+    model.component("comp1").selection("geothermal_boundary_selection").set("condition", "allvertices")
     
     model.component("comp1").selection().create("sweep_domains_selection", "Box")
     model.component("comp1").selection("sweep_domains_selection").label("Sweep Domains Selection")
@@ -216,21 +259,18 @@ def init_model(client, params, geology):
     model.component("comp1").selection("collar_edge_selection").set("bottom", "0")
     model.component("comp1").selection("collar_edge_selection").set("condition", "allvertices")
     
-    layer_tags = []
-
     for layer in geology.layers:
-        tag = f"layer{len(layer_tags)+1}_selection"
+        tag = f"{layer.tag}_selection"
         model.component("comp1").selection().create(tag, "Box")
         model.component("comp1").selection(tag).label(f"{layer.name} Selection")
         model.component("comp1").selection(tag).set("entitydim", "3")
         model.component("comp1").selection(tag).set("zmin", f"{layer.z_to}")
         model.component("comp1").selection(tag).set("zmax", f"{layer.z_from}")
         model.component("comp1").selection(tag).set("condition", "allvertices")
-        layer_tags.append(tag)
 
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
 
     # Creates mesh.
 
@@ -323,7 +363,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
 
     num_elems = model.component("comp1").mesh("mesh1").stat().getNumElem()
     
@@ -335,24 +375,73 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-    model.component("comp1").physics().create("ht", "HeatTransfer", "geom1")
+    if geology.has_porous_layers:
+        model.component("comp1").physics().create("ht", "PorousMediaHeatTransfer", "geom1");
+    else:
+        model.component("comp1").physics().create("ht", "HeatTransfer", "geom1")
+
     model.component("comp1").physics("ht").prop("ShapeProperty").set("order_temperature", "1")
-    
+
     model.component("comp1").physics("ht").feature("init1").set("Tinit", "T_initial(z)")
     
-    for i, layer in enumerate(geology.layers):
-        tag = f"solid{i+1}"
-        if i > 0:
+    if geology.has_porous_layers:
+        
+        porous_layers = filter(lambda layer: layer.porosity > 0, geology.layers)
+        
+        for i, layer in enumerate(porous_layers):
+            tag = f"porous{i+1}"
+            if i > 0:
+                model.component("comp1").physics("ht").create(tag, "PorousMediumHeatTransferModel", 3)
+                model.component("comp1").physics("ht").feature(tag).selection().named(f"{layer.tag}_selection")
+            model.component("comp1").physics("ht").feature(tag).label(f"{layer.name} Porous Medium")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").label("Water")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("k_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("k", "k_water")#[["k_water", "0", "0", "0", "k_water", "0", "0", "0", "k_water"]])
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("rho_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("rho", "rho_water")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("Cp_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("Cp", "Cp_water")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("gamma_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("gamma", "1")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").label(f"{layer.name} Porous Matrix")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("poro_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("poro", f"{layer.porosity}")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("k_b_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("k_b", [[f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"]])
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("rho_b_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("rho_b", f"rho_{layer.tag}")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("Cp_b_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).feature("pm1").set("Cp_b", f"Cp_{layer.tag}")
+
+        solid_layers = filter(lambda layer: layer.porosity == 0, geology.layers)
+        
+        for i, layer in enumerate(solid_layers):
+            tag = f"solid{i+1}"
             model.component("comp1").physics("ht").create(tag, "SolidHeatTransferModel", 3)
-            model.component("comp1").physics("ht").feature(tag).selection().named(layer_tags[i])
-        model.component("comp1").physics("ht").feature(tag).label(f"{layer.name} Solid")
-        model.component("comp1").physics("ht").feature(tag).set("k_mat", "userdef")
-        model.component("comp1").physics("ht").feature(tag).set("k", [[f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"]])
-        model.component("comp1").physics("ht").feature(tag).set("rho_mat", "userdef")
-        model.component("comp1").physics("ht").feature(tag).set("rho", f"rho_{layer.tag}")
-        model.component("comp1").physics("ht").feature(tag).set("Cp_mat", "userdef")
-        model.component("comp1").physics("ht").feature(tag).set("Cp", f"Cp_{layer.tag}")
-    
+            model.component("comp1").physics("ht").feature(tag).selection().named(f"{layer.tag}_selection")
+            model.component("comp1").physics("ht").feature(tag).label(f"{layer.name} Solid")
+            model.component("comp1").physics("ht").feature(tag).set("k_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("k", [[f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"]])
+            model.component("comp1").physics("ht").feature(tag).set("rho_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("rho", f"rho_{layer.tag}")
+            model.component("comp1").physics("ht").feature(tag).set("Cp_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("Cp", f"Cp_{layer.tag}")
+
+    else:
+
+        for i, layer in enumerate(geology.layers):
+            tag = f"solid{i+1}"
+            if i > 0:
+                model.component("comp1").physics("ht").create(tag, "SolidHeatTransferModel", 3)
+                model.component("comp1").physics("ht").feature(tag).selection().named(f"{layer.tag}_selection")
+            model.component("comp1").physics("ht").feature(tag).label(f"{layer.name} Solid")
+            model.component("comp1").physics("ht").feature(tag).set("k_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("k", [[f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_{layer.tag}"]])
+            model.component("comp1").physics("ht").feature(tag).set("rho_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("rho", f"rho_{layer.tag}")
+            model.component("comp1").physics("ht").feature(tag).set("Cp_mat", "userdef")
+            model.component("comp1").physics("ht").feature(tag).set("Cp", f"Cp_{layer.tag}")
+        
     model.component("comp1").physics("ht").create("ground_surface_temperature", "TemperatureBoundary", 2)
     model.component("comp1").physics("ht").feature("ground_surface_temperature").label("Ground Surface Temperature")
     model.component("comp1").physics("ht").feature("ground_surface_temperature").selection().named("ground_surface_selection")
@@ -360,7 +449,7 @@ def init_model(client, params, geology):
     
     model.component("comp1").physics("ht").create("geothermal_heat_flux", "HeatFluxBoundary", 2)
     model.component("comp1").physics("ht").feature("geothermal_heat_flux").label("Geothermal Heat Flux")
-    model.component("comp1").physics("ht").feature("geothermal_heat_flux").selection().named("bottom_boundary_selection")
+    model.component("comp1").physics("ht").feature("geothermal_heat_flux").selection().named("geothermal_boundary_selection")
     model.component("comp1").physics("ht").feature("geothermal_heat_flux").set("q0", "q_geothermal")
     model.component("comp1").physics("ht").feature("geothermal_heat_flux").set("materialType", "solid")
     
@@ -371,7 +460,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Creates operators and variables.
     
@@ -407,7 +496,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Creates solution and solver.
     
@@ -458,7 +547,7 @@ def init_model(client, params, geology):
     
     toc = time.time()
     
-    print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    print(f"Done in {time_elapsed(toc-tic)}.")
 
     # Evaluates the first time step.
     
@@ -470,7 +559,7 @@ def init_model(client, params, geology):
 
     # toc = time.time()
     
-    # print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    # print(f"Done in {time_elapsed(toc-tic)}.")
     
     # Adds a plot.
     
@@ -492,7 +581,7 @@ def init_model(client, params, geology):
 
     # toc = time.time()
     
-    # print(f"Done in {str(np.round(toc-tic,3))} seconds.")
+    # print(f"Done in {time_elapsed(toc-tic)}.")
     
     xmi = model.sol("sol1").feature("st1").xmeshInfo()
     
@@ -501,3 +590,39 @@ def init_model(client, params, geology):
     print(f"Number of degrees of freedom: {num_dofs:,}")
     
     return python_model
+
+if __name__ == "__main__":
+    from geology import Material, Layer, Geology
+    import mph
+    client = mph.start(cores=8)
+    # Creates and prints parameters.
+    params = Parameters(L_borehole=300, D_borehole=0.115, borehole_spacing=500, E_annual=30, num_years=20)
+    print(params)
+    # Creates materials.
+    mat1 = Material("Mat 1", 1, 600, 1111)
+    mat2 = Material("Mat 2", 2, 700, 2222)
+    mat3 = Material("Mat 3", 3, 800, 3333)
+    # No porous layers.
+    geology0 = Geology("Geo 0", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3)])
+    model0 = init_model(client, params, geology0)
+    save_model(model0)
+    # First layer is porous.
+    geology1 = Geology("Geo 1", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1, 0.111), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3)])
+    model1 = init_model(client, params, geology1)
+    save_model(model1)
+    # Second layer is porous.
+    geology2 = Geology("Geo 2", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3)])
+    model2 = init_model(client, params, geology2)
+    save_model(model2)
+    # Third layer is porous.
+    geology3 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    model3 = init_model(client, params, geology3)
+    save_model(model3)
+    # All layers below first layer are porous.
+    geology4 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    model4 = init_model(client, params, geology4)
+    save_model(model4)
+    # All layers are porous.
+    geology5 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1, 0.111), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    model5 = init_model(client, params, geology5)
+    save_model(model5)
