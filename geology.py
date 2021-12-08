@@ -18,17 +18,18 @@ class Material:
 
 class Geology:
     """This class represents a geological model including both environmental variables and geological layers."""
-    
+
     def __init__(self, name, T_surface, q_geothermal, layers=[]):
         self.name = " ".join([token.capitalize() for token in name.replace("_", " ").split()])
         self.T_surface = T_surface # Ground surface temperature [degC]
         self.q_geothermal = q_geothermal # Geothermal heat flux density [W/m^2]
         self.thickness = 0 # Thickness of the model [m]
         self.has_porous_layers = False # True if the model has at least one porous layer
+        self.has_groundwater_flow = False # True if the model has at least one layer with groundwater flow
         self.layers = [] # The layers in the model
         if len(layers) > 0:
             self.add_layers(layers)
-        
+
     def add_layer(self, layer):
         """Adds a single layer to the geology."""
         if len(self.layers) == 0:
@@ -45,13 +46,15 @@ class Geology:
                 raise ValueError("Layers can be added only to the bottom of the geology.")
         if layer.porosity > 0:
             self.has_porous_layers = True
+        if layer.velocity > 0:
+            self.has_groundwater_flow = True
         self.thickness = -layer.z_to
-                
+
     def add_layers(self, layers):
         """Adds a list of layers to the geology."""
         for layer in layers:
             self.add_layer(layer)
-            
+
     def split(self, z):
         """Adds a layer interface at the depth z."""
         split_layers = []
@@ -62,18 +65,22 @@ class Geology:
     def __str__(self):
         layers = ", ".join([f"{layer.name} ({str(np.round(layer.thickness,3))} m)" for layer in self.layers])
         return f"Geology(name={self.name}, T_surface={self.T_surface} \xb0C, q_geothermal={1000*self.q_geothermal} mW/m\xb2, thickness={self.thickness} m, has_porous_layers={self.has_porous_layers}, layers=[{layers}])"
-        
+
 
 class Layer:
     """This class represents a geological layer with a vertical extent, material, and porosity."""
-    
-    def __init__(self, name, z_from, z_to, material, porosity=0):
+
+    def __init__(self, name, z_from, z_to, material, porosity=0, velocity=0):
         if z_from > 0:
             raise ValueError("The layer must be located below the zero level.")
         if z_to > z_from:
             raise ValueError("The top of the layer must be located above its bottom.")
         if porosity < 0 or porosity >= 1:
             raise ValueError("Porosity must be greater than or equal to zero and less than one.")
+        if velocity < 0:
+            raise ValueError("Velocity must be greater than or equal to zero.")
+        if velocity > 0 and porosity == 0:
+            raise ValueError("Layer can not have groundwater flow if it has zero porosity.")
         self.name = " ".join([token.capitalize() for token in name.replace("_", " ").split()])
         self.tag = self.name.replace(" ", "_").lower()
         self.z_from = z_from
@@ -81,18 +88,19 @@ class Layer:
         self.thickness = z_from - z_to
         self.material = material
         self.porosity = porosity
-            
+        self.velocity = velocity
+
     def split(self, z):
         """Splits this layer to two parts. One part is above the depth z and the other is below the depth z."""
         if self.z_to < z and z < self.z_from:
-            above = Layer(f"Upper Part of {self.name}", self.z_from, z, self.material, self.porosity)
-            below = Layer(f"Lower Part of {self.name}", z, self.z_to, self.material, self.porosity)
+            above = Layer(f"Upper Part of {self.name}", self.z_from, z, self.material, self.porosity, self.velocity)
+            below = Layer(f"Lower Part of {self.name}", z, self.z_to, self.material, self.porosity, self.velocity)
             return [above, below]
         else:
             return [self]
 
     def __str__(self):
-        return f"Layer(name={self.name}, tag={self.tag}, z_from={self.z_from} m, z_to={self.z_to} m, thickness={self.thickness} m, material={self.material}, porosity={self.porosity})"
+        return f"Layer(name={self.name}, tag={self.tag}, z_from={self.z_from} m, z_to={self.z_to} m, thickness={self.thickness} m, material={self.material}, porosity={self.porosity}, velocity={self.velocity} m/s)"
 
 
 if __name__ == "__main__":
