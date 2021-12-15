@@ -1,4 +1,4 @@
-from comsol import Parameters, init_model, eval_temp, save_model
+from comsol import Parameters, init_model, eval_temp
 from geology import Material, Geology, Layer
 import matplotlib.pyplot as plt
 import pandas as pd

@@ -1,17 +1,17 @@
+from utils import num_to_str, time_elapsed, save_model
 import numpy as np
 import time
-import os
 
 
 class Parameters:
-    """This class is used to store parameters regarding the borehole and heat extraction from it."""
+    """This class is used to store model parameters regarding the borehole and heat extraction from it."""
 
     def __init__(self, L_borehole, D_borehole, borehole_spacing, num_years, E_annual, monthly_fractions=None):
         if monthly_fractions is not None:
             if not len(monthly_fractions) == 12:
                 raise ValueError("There must be 12 monthly fractions.")
             if np.abs(np.sum(monthly_fractions)-1) > 1e-6:
-                raise ValueError("The sum of monthly fractions must be 1.")
+                raise ValueError("The sum of monthly fractions must be one.")
         self.L_borehole = L_borehole
         self.D_borehole = D_borehole
         self.borehole_spacing = borehole_spacing
@@ -20,47 +20,22 @@ class Parameters:
         self.monthly_fractions = monthly_fractions
 
     def __str__(self):
-        s = f"L_borehole={self.L_borehole} m, D_borehole={int(1000*self.D_borehole)} mm, borehole_spacing={self.borehole_spacing} m, num_years={self.num_years}, E_annual={str(round(self.E_annual,3))} MWh"
+        descr = f"L_borehole={num_to_str(self.L_borehole)} m, D_borehole={num_to_str(1000*self.D_borehole)} mm, borehole_spacing={num_to_str(self.borehole_spacing)} m, num_years={num_to_str(self.num_years)}, E_annual={num_to_str(self.E_annual)} MWh"
         if self.monthly_fractions is not None:
-            monthly_fractions = ", ".join([str(fraction) for fraction in self.monthly_fractions]).replace(".0", "")
-            s += f", monthly_fractions=[{monthly_fractions}]"
-        return f"Parameters({s})"
-
-
-def time_elapsed(seconds):
-    """Formats seconds as XmXs."""
-    seconds = int(np.floor(seconds))
-    minutes = seconds // 60
-    seconds %= 60
-    if minutes == 0:
-        return f"{seconds}s"
-    elif seconds == 0:
-        return f"{minutes}m"
-    return f"{minutes}m{seconds}s"
-
-
-def save_model(model, base_name="temp"):
-    """Saves the specified model to disk."""
-    for i in range(1000):
-        file_name = f"{base_name.lower()}_{i:03d}.mph"
-        if os.path.exists(file_name):
-            print(f"File '{file_name}' already exists.")
-        else:
-            model.save(file_name)
-            print(f"Saved model to file '{file_name}'.")
-            return
-    raise ValueError(f"Unable to save model using base name '{base_name.lower()}'.")
+            monthly_fractions = ", ".join([num_to_str(fraction) for fraction in self.monthly_fractions])
+            descr += f", monthly_fractions=[{monthly_fractions}]"
+        return f"Parameters({descr})"
 
 
 def eval_temp(model, E_annual):
-    """Evaluates the coldest mean borehole wall temperature during the simulation."""
+    """Evaluates the coldest mean borehole wall temperature during a simulation using the specified heat extraction."""
     tic = time.time()
-    model.parameter("E_annual", f"{E_annual}[MWh]")
+    model.parameter("E_annual", f"{num_to_str(E_annual)}[MWh]")
     model.solve()
     T_ave = model.evaluate("T_ave", "degC")
     temp = np.min(T_ave)
     toc = time.time()
-    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={E_annual:.3f} MWh, temp={temp:.6f} K")
+    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={num_to_str(E_annual)} MWh, temp={num_to_str(temp,decimals=6)} K")
     return temp
 
 
@@ -93,33 +68,33 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-    model.param().set("H_model", f"{geology.thickness}[m]")
+    model.param().set("H_model", f"{num_to_str(geology.thickness)}[m]")
 
-    model.param().set("D_borehole", f"{params.D_borehole}[m]")
-    model.param().set("L_borehole", f"{params.L_borehole}[m]")
-    model.param().set("borehole_spacing", f"{params.borehole_spacing}[m]")
+    model.param().set("D_borehole", f"{num_to_str(params.D_borehole)}[m]")
+    model.param().set("L_borehole", f"{num_to_str(params.L_borehole)}[m]")
+    model.param().set("borehole_spacing", f"{num_to_str(params.borehole_spacing)}[m]")
 
     for layer in geology.layers:
-        model.param().set(f"h_{layer.tag}", f"{layer.thickness}[m]")
-        model.param().set(f"k_{layer.tag}", f"{layer.material.k}[W/(m*K)]")
-        model.param().set(f"Cp_{layer.tag}", f"{layer.material.Cp}[J/(kg*K)]")
-        model.param().set(f"rho_{layer.tag}", f"{layer.material.rho}[kg/m^3]")
-        if layer.porosity > 0:
-            model.param().set(f"eps_{layer.tag}", f"{layer.porosity}[1]")
+        model.param().set(f"h_{layer.tag}", f"{num_to_str(layer.thickness)}[m]")
+        model.param().set(f"k_{layer.tag}", f"{num_to_str(layer.material.k)}[W/(m*K)]")
+        model.param().set(f"Cp_{layer.tag}", f"{num_to_str(layer.material.Cp)}[J/(kg*K)]")
+        model.param().set(f"rho_{layer.tag}", f"{num_to_str(layer.material.rho)}[kg/m^3]")
+        if layer.material.porosity > 0:
+            model.param().set(f"eps_{layer.tag}", f"{num_to_str(layer.material.porosity)}[1]")
         if layer.velocity > 0:
-            model.param().set(f"v_{layer.tag}", f"{layer.velocity}[m/s]")
-        k_eff = (1 - layer.porosity) * layer.material.k + layer.porosity * 0.6
-        model.param().set(f"k_eff_{layer.tag}", f"{k_eff}[W/(m*K)]")
+            model.param().set(f"v_{layer.tag}", f"{num_to_str(layer.velocity,decimals=9)}[m/s]")
+        k_eff = (1 - layer.material.porosity) * layer.material.k + layer.material.porosity * 0.6
+        model.param().set(f"k_eff_{layer.tag}", f"{num_to_str(k_eff)}[W/(m*K)]")
 
     if geology.has_porous_layers:
         model.param().set("k_water", "0.6[W/(m*K)]")
         model.param().set("Cp_water", "4186[J/(kg*K)]")
         model.param().set("rho_water", "1000[kg/m^3]")
 
-    model.param().set("T_surface", f"{geology.T_surface}[degC]")
-    model.param().set("q_geothermal", f"{geology.q_geothermal}[W/m^2]")
+    model.param().set("T_surface", f"{num_to_str(geology.T_surface)}[degC]")
+    model.param().set("q_geothermal", f"{num_to_str(1000*geology.q_geothermal)}[mW/m^2]")
 
-    model.param().set("E_annual", f"{params.E_annual}[MWh]")
+    model.param().set("E_annual", f"{num_to_str(params.E_annual)}[MWh]")
 
     model.param().set("A_wall", "pi*D_borehole*L_borehole")
 
@@ -423,7 +398,7 @@ def init_model(client, params, geology):
 
     if geology.has_porous_layers:
 
-        porous_layers = filter(lambda layer: layer.porosity > 0, geology.layers)
+        porous_layers = filter(lambda layer: layer.material.porosity > 0, geology.layers)
 
         for i, layer in enumerate(porous_layers):
 
@@ -458,7 +433,7 @@ def init_model(client, params, geology):
                 model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("u_src", "userdef");
                 model.component("comp1").physics("ht").feature(tag).feature("fluid1").set("u", [f"v_{layer.tag}", "0", "0"])
 
-        solid_layers = filter(lambda layer: layer.porosity == 0, geology.layers)
+        solid_layers = filter(lambda layer: layer.material.porosity == 0, geology.layers)
 
         for i, layer in enumerate(solid_layers):
 
@@ -656,29 +631,29 @@ if __name__ == "__main__":
     print(params)
     # Creates materials.
     mat1 = Material("Mat 1", 1, 600, 1111)
-    mat2 = Material("Mat 2", 2, 700, 2222)
+    mat2 = Material("Mat 2", 2, 700, 2222, 0.333)
     mat3 = Material("Mat 3", 3, 800, 3333)
     # No porous layers.
-    geology0 = Geology("Geo 0", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3)])
+    geology0 = Geology("Geo 0", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50), Layer("Lyr 2", mat2, -50, -200), Layer("Lyr 3", mat3, -200, -500)])
     model0 = init_model(client, params, geology0)
     save_model(model0)
     # First layer is porous.
-    geology1 = Geology("Geo 1", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1, 0.111), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3)])
+    geology1 = Geology("Geo 1", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50, 0.111), Layer("Lyr 2", mat2, -50, -200, mat2), Layer("Lyr 3", mat3, -200, -500)])
     model1 = init_model(client, params, geology1)
     save_model(model1)
     # Second layer is porous.
-    geology2 = Geology("Geo 2", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3)])
+    geology2 = Geology("Geo 2", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50), Layer("Lyr 2", mat2, -50, -200, 0.222), Layer("Lyr 3", mat3, -200, -500)])
     model2 = init_model(client, params, geology2)
     save_model(model2)
     # Third layer is porous.
-    geology3 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    geology3 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50), Layer("Lyr 2", mat2, -50, -200), Layer("Lyr 3", mat3, -200, -500, 0.333)])
     model3 = init_model(client, params, geology3)
     save_model(model3)
     # All layers below first layer are porous.
-    geology4 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    geology4 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50), Layer("Lyr 2", mat2, -50, -200, 0.222), Layer("Lyr 3", mat3, -200, -500, 0.333)])
     model4 = init_model(client, params, geology4)
     save_model(model4)
     # All layers are porous.
-    geology5 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", 0, -50, mat1, 0.111), Layer("Lyr 2", -50, -200, mat2, 0.222), Layer("Lyr 3", -200, -500, mat3, 0.333)])
+    geology5 = Geology("Geo 3", 12.3, 45.6e-3, [Layer("Lyr 1", mat1, 0, -50, 0.111), Layer("Lyr 2", mat2, -50, -200, 0.222), Layer("Lyr 3", mat3, -200, -500, 0.333)])
     model5 = init_model(client, params, geology5)
     save_model(model5)

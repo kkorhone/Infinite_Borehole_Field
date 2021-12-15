@@ -78,6 +78,7 @@ if __name__ == "__main__":
 
     if os.path.exists(file_name):
         data_frame = pd.read_excel(file_name)
+        print(data_frame)
     else:
         data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "R_squared", "RMSE"])
 

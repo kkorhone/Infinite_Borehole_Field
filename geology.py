@@ -1,19 +1,21 @@
-import numpy as np
-
+from utils import num_to_str
 
 class Material:
     """This class is used to store physical properties of materials."""
 
-    def __init__(self, name, k, Cp, rho):
+    def __init__(self, name, k, Cp, rho, porosity=0):
+        if porosity < 0 or porosity >= 1:
+            raise ValueError("Porosity must be greater than or equal to zero and less than one.")
         self.name = " ".join([token.capitalize() for token in name.replace("_", " ").split()])
         self.tag = self.name.replace(" ", "_").lower()
-        self.k = k # Thermal conductivity [W/(m*K)]
-        self.Cp = Cp # Specific heat capacity [J/(kg*K)]
-        self.rho = rho # Density [kg/m^3]
-        self.C = self.rho * self.Cp # Volumetric heat capacity [J/(m^3*K)]
+        self.porosity = porosity # Porosity [1]
+        self.k = (1 - porosity) * k + porosity * 0.6 # Effective thermal conductivity [W/(m*K)]
+        self.rho = (1 - porosity) * rho + porosity * 1000 # Effective density [W/(m*K)]
+        self.C = (1 - porosity) * rho * Cp + porosity * 1000 * 4186 # Effective volumetric heat capacity [J/(m^3*K)]
+        self.Cp = self.C / self.rho # Effective specific heat capacity [J/(kg*K)]
 
     def __str__(self):
-        return f"Material(name={self.name}, tag={self.tag}, k={self.k} W/(m\xb7K), Cp={self.Cp} J/(kg\xb7K), rho={self.rho} kg/m\xb3, C={self.C/1000000} MJ/(m\xb3\xb7K))"
+        return f"Material(name={self.name}, tag={self.tag}, k={num_to_str(self.k)} W/(m\xb7K), Cp={num_to_str(self.Cp)} J/(kg\xb7K), rho={num_to_str(self.rho)} kg/m\xb3, C={num_to_str(self.C/1000000)} MJ/(m\xb3\xb7K), porosity={num_to_str(100*self.porosity)} %)"
 
 
 class Geology:
@@ -44,7 +46,7 @@ class Geology:
                 self.layers.append(layer)
             else:
                 raise ValueError("Layers can be added only to the bottom of the geology.")
-        if layer.porosity > 0:
+        if layer.material.porosity > 0:
             self.has_porous_layers = True
         if layer.velocity > 0:
             self.has_groundwater_flow = True
@@ -63,60 +65,57 @@ class Geology:
         return Geology(self.name, self.T_surface, self.q_geothermal, split_layers)
 
     def __str__(self):
-        layers = ", ".join([f"{layer.name} ({str(np.round(layer.thickness,3))} m)" for layer in self.layers])
-        return f"Geology(name={self.name}, T_surface={self.T_surface} \xb0C, q_geothermal={1000*self.q_geothermal} mW/m\xb2, thickness={self.thickness} m, has_porous_layers={self.has_porous_layers}, layers=[{layers}])"
+        layers = ", ".join([f"{layer.name} ({num_to_str(layer.thickness)} m)" for layer in self.layers])
+        return f"Geology(name={self.name}, T_surface={num_to_str(self.T_surface)} \xb0C, q_geothermal={num_to_str(1000*self.q_geothermal)} mW/m\xb2, thickness={num_to_str(self.thickness)} m, has_porous_layers={self.has_porous_layers}, has_groundwater_flow={self.has_groundwater_flow}, layers=[{layers}])"
 
 
 class Layer:
     """This class represents a geological layer with a vertical extent, material, and porosity."""
 
-    def __init__(self, name, z_from, z_to, material, porosity=0, velocity=0):
+    def __init__(self, name, material, z_from, z_to, velocity=0):
         if z_from > 0:
             raise ValueError("The layer must be located below the zero level.")
         if z_to > z_from:
             raise ValueError("The top of the layer must be located above its bottom.")
-        if porosity < 0 or porosity >= 1:
-            raise ValueError("Porosity must be greater than or equal to zero and less than one.")
         if velocity < 0:
             raise ValueError("Velocity must be greater than or equal to zero.")
-        if velocity > 0 and porosity == 0:
-            raise ValueError("Layer can not have groundwater flow if it has zero porosity.")
+        if velocity > 0 and material.porosity == 0:
+            raise ValueError("Layer can not have groundwater flow if its material has zero porosity.")
         self.name = " ".join([token.capitalize() for token in name.replace("_", " ").split()])
         self.tag = self.name.replace(" ", "_").lower()
         self.z_from = z_from
         self.z_to = z_to
         self.thickness = z_from - z_to
         self.material = material
-        self.porosity = porosity
         self.velocity = velocity
 
     def split(self, z):
         """Splits this layer to two parts. One part is above the depth z and the other is below the depth z."""
         if self.z_to < z and z < self.z_from:
-            above = Layer(f"Upper Part of {self.name}", self.z_from, z, self.material, self.porosity, self.velocity)
-            below = Layer(f"Lower Part of {self.name}", z, self.z_to, self.material, self.porosity, self.velocity)
+            above = Layer(f"Upper Part of {self.name}", self.material, self.z_from, z, self.velocity)
+            below = Layer(f"Lower Part of {self.name}", self.material, z, self.z_to, self.velocity)
             return [above, below]
         else:
             return [self]
 
     def __str__(self):
-        return f"Layer(name={self.name}, tag={self.tag}, z_from={self.z_from} m, z_to={self.z_to} m, thickness={self.thickness} m, material={self.material}, porosity={self.porosity}, velocity={self.velocity} m/s)"
+        return f"Layer(name={self.name}, tag={self.tag}, material={self.material}, z_from={num_to_str(self.z_from)} m, z_to={num_to_str(self.z_to)} m, thickness={num_to_str(self.thickness)} m, velocity={num_to_str(self.velocity)} m/s)"
 
 
 if __name__ == "__main__":
     # Creates materials
-    water = Material("Water", 0.6, 4186, 1000)
-    sand = Material("Sand", 1, 1000, 1800)
+    sand = Material("Sand", 1, 1000, 1800, 0.3)
     granite = Material("Granite", 3, 730, 2700)
     # Prints materials
-    print(water)
     print(sand)
     print(granite)
     # Creates geologies
     geology1 = Geology("bedrock with overburden", 12.3, 0.04567)
-    geology1.add_layers([Layer("overburden", 0, -50, sand, 0.3), Layer("bedrock", -50, -200, granite)])
+    geology1.add_layers([Layer("overburden", sand, 0, -50), Layer("bedrock", granite, -50, -200)])
     geology2 = Geology("granitic geology", 12.3, 0.04567)
-    geology2.add_layers([Layer("granite", 0, -200, granite)])
+    geology2.add_layer(Layer("granite", granite, 0, -200))
+    geology3 = Geology("bedrock with overburden and groundwater flow", 12.3, 0.04567)
+    geology3.add_layers([Layer("overburden", sand, 0, -50, 1e-6), Layer("bedrock", granite, -50, -200)])
     # Prints layers
     for layer in geology1.layers:
         print(layer)
@@ -125,3 +124,4 @@ if __name__ == "__main__":
     # Prints geologies
     print(geology1)
     print(geology2)
+    print(geology3)
