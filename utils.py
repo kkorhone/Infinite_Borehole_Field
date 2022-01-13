@@ -2,12 +2,28 @@ import numpy as np
 import os
 
 
-def num_to_str(num, decimals=3):
+def max_cap(label):
+    toks = label.lower().split()
+    caps = toks[0]
+    for tok in toks[1:]:
+        if tok in ["a", "an", "the", "of", "in", "on"]:
+            caps += f" {tok}"
+        else:
+            caps += f" {tok.capitalize()}"
+    return caps
+
+
+def num_to_str(num):
     """Makes a nice string out of the specified number."""
-    if num == int(num):
-        return str(int(num))
+    if num == 0:
+        return "0"
     else:
-        return str(round(num, decimals))
+        dec = 6 - int(np.ceil(np.log10(abs(num))))
+        if dec > 0:
+            return str(round(num, dec))
+        else:
+            return str(int(num))
+
 
 def time_elapsed(seconds):
     """Formats seconds as XmYs."""
