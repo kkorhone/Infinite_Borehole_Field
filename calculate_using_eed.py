@@ -5,6 +5,7 @@ from utils import save_model
 import pandas as pd
 import numpy as np
 import os, mph
+import eed
 
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # Gets rid of the annoying OpenMP initialization error.
@@ -12,7 +13,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # Gets rid of the annoying OpenMP in
 
 if __name__ == "__main__":
 
-    file_name = "results_v9_with_groundwater_flow.xlsx"
+    file_name = "results_v8_with_groundwater_flow.xlsx"
 
     # Sets up the monthly energy consumption profile.
 
@@ -133,65 +134,62 @@ if __name__ == "__main__":
 
     # Estimates the shallow geothermal potentials.
 
-    if os.path.exists(file_name):
-        data_frame = pd.read_excel(file_name)
-    else:
-        data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "R_squared", "RMSE"])
+    data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "T_fluid"])
 
     L_borehole = [100, 200]
     borehole_spacing = [20, 500]
-
-    client = mph.start(cores=8)
 
     for i in range(len(L_borehole)):
         for j in range(len(borehole_spacing)):
             for k in range(len(geology)):
 
-                df = data_frame[(data_frame["L_borehole"]==L_borehole[i]) & (data_frame["borehole_spacing"]==borehole_spacing[j]) & (data_frame["Geology"]==geology[k].name)]
+                avg = geology[k].calc_averages()
 
-                if len(df) > 0:
-                    print(f"Skipping geology={geology[k].name}, L_borehole={L_borehole[i]} m, borehole_spacing={borehole_spacing[j]} m")
-                    continue
+                if borehole_spacing[j] == 20:
+                    rec_num = 761
+                elif borehole_spacing[j] == 500:
+                    rec_num = 0
                 else:
-                    print(f"Calculating geology={geology[k].name}, L_borehole={L_borehole[i]} m, borehole_spacing={borehole_spacing[j]} m")
+                    raise ValueError("rec_num")
 
-                params = Parameters(L_borehole=L_borehole[i], D_borehole=0.150, borehole_spacing=borehole_spacing[j], E_annual=0, num_years=50, monthly_fractions=monthly_fractions)
+                params = {
+                    "k_ground": avg["k"],
+                    "C_ground": avg["C"],
+                    "T_surface": geology[k].T_surface,
+                    "q_geothermal": geology[k].q_geothermal,
+                    "rec_num": rec_num,
+                    "L_borehole": L_borehole[i],
+                    "D_borehole": 0.150,
+                    "borehole_spacing": borehole_spacing[j],
+                    "R_borehole": 0.0,
+                    "E_annual": 100,
+                    "SPF": 99999,
+                    "num_years": 50,
+                    "monthly_fractions": np.array([0.194717, 0.17216, 0.128944, 0.075402, 0.024336, 0, 0, 0, 0.025227, 0.076465, 0.129925, 0.172824])
+                }
 
-                model = init_model(client, params, geology[k])
+                print(params)
 
-                save_model(model, f"geology{k+1}_{L_borehole[i]}m_{borehole_spacing[j]}m")
+                if borehole_spacing[j] == 20:
+                    if L_borehole[i] == 100:
+                        E_max, T_fluid = eed.optimize_energy(params, [5000, 20000], 0)
+                    elif L_borehole[i] == 200:
+                        E_max, T_fluid = eed.optimize_energy(params, [5000, 40000], 0)
+                    else:
+                        raise ValueError("L_borehole")
+                    E_annual = E_max / 1156
+                elif borehole_spacing[j] == 500:
+                    if L_borehole[i] == 100:
+                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50], 0)
+                    elif L_borehole[i] == 200:
+                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50], 0)
+                    else:
+                        raise ValueError("L_borehole")
+                else:
+                    raise ValueError("borehole_spacing")
 
-                x = [5, 10, 20]
-                y = [eval_temp(model, _x) for _x in x]
+                print(f"geology={geology[k].name}, L_borehole={params['L_borehole']} m, borehole_spacing={params['borehole_spacing']} m, E_annual={E_annual:.6f} MWh, T_fluid={T_fluid:.6f} \xb0C")
 
-                p = np.polyfit(x, y, 1)
+                data_frame.loc[len(data_frame)] = [geology[k].name, L_borehole[i], borehole_spacing[j], E_annual, T_fluid]
 
-                SS_res = np.sum((y - np.polyval(p, x))**2)
-                SS_tot = np.sum((y - np.mean(y))**2)
-
-                R_squared = 1 - SS_res / SS_tot
-
-                rmse = np.sqrt(np.mean((y - np.polyval(p, x))**2))
-
-                xi = np.linspace(x[0], x[-1], 1000)
-                yi = np.polyval(p, xi)
-
-                crude_estimate = p[1] / -p[0]
-
-                plt.figure()
-                plt.plot(x, y, "bo")
-                plt.plot(xi, yi, "r-")
-                plt.axhline(0, ls="--", color="r")
-                plt.axvline(crude_estimate, ls="--", color="r")
-                plt.plot([crude_estimate], [0], "rx")
-                plt.gca().set_xlim([x[0], x[-1]])
-                plt.xlabel("E_annual [MWh]")
-                plt.ylabel(u"temp [\xb0C]")
-                plt.tight_layout()
-                plt.show()
-
-                print(f"geology={geology[k].name}, L_borehole={params.L_borehole} m, borehole_spacing={params.borehole_spacing} m, crude_estimate={crude_estimate:.6f} MWh")
-
-                data_frame.loc[len(data_frame)] = [geology[k].name, L_borehole[i], borehole_spacing[j], crude_estimate, R_squared, rmse]
-
-                data_frame.to_excel(file_name)
+                data_frame.to_excel("results_eed.xlsx")

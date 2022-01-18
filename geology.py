@@ -112,6 +112,16 @@ class Geology:
         if type(layer) is PorousLayer and layer.velocity > 0:
             self.has_groundwater_flow = True
 
+    def calc_averages(self):
+        averages = {"k": 0, "Cp": 0, "rho": 0, "C": 0}
+        for layer in self.layers:
+            weight = layer.thickness / self.thickness
+            averages["k"] += weight * layer.material.k
+            averages["Cp"] += weight * layer.material.Cp
+            averages["rho"] += weight * layer.material.rho
+            averages["C"] += weight * layer.material.rho * layer.material.Cp
+        return averages
+
     def add_layers(self, layers):
         """Adds a list of layers to this geology."""
         for layer in layers:

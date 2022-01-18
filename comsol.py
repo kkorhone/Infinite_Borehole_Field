@@ -9,7 +9,7 @@ class Parameters:
 
     def __init__(self, L_borehole, D_borehole, borehole_spacing, num_years, E_annual, monthly_fractions=None):
         if monthly_fractions is not None:
-            if not len(monthly_fractions) == 12:
+            if len(monthly_fractions) != 12:
                 raise ValueError("There must be 12 monthly fractions.")
             if np.abs(np.sum(monthly_fractions)-1) > 1e-6:
                 raise ValueError("The sum of monthly fractions must be one.")
@@ -36,7 +36,7 @@ def eval_temp(model, E_annual):
     T_ave = model.evaluate("T_ave", "degC")
     temp = np.min(T_ave)
     toc = time.time()
-    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={num_to_str(E_annual)} MWh, temp={num_to_str(temp,decimals=6)} K")
+    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={num_to_str(E_annual)} MWh, temp={num_to_str(temp)} K")
     return temp
 
 
@@ -84,15 +84,18 @@ def init_model(client, params, geology):
 
     for layer in geology.layers:
         model.java.param().set(f"h_{layer.tag}", f"{num_to_str(layer.thickness)}[m]")
-        model.java.param().set(f"k_{layer.tag}", f"{num_to_str(layer.material.k)}[W/(m*K)]")
-        model.java.param().set(f"Cp_{layer.tag}", f"{num_to_str(layer.material.Cp)}[J/(kg*K)]")
-        model.java.param().set(f"rho_{layer.tag}", f"{num_to_str(layer.material.rho)}[kg/m^3]")
-        #if type(layer.material) is PorousMaterial:
-        #    if layer.material.porosity > 0:
-        #        model.java.param().set(f"eps_{layer.tag}", f"{num_to_str(layer.material.porosity)}[1]")
+        model.java.param().set(f"k_eff_{layer.tag}", f"{num_to_str(layer.material.k)}[W/(m*K)]")
+        model.java.param().set(f"Cp_eff_{layer.tag}", f"{num_to_str(layer.material.Cp)}[J/(kg*K)]")
+        model.java.param().set(f"rho_eff_{layer.tag}", f"{num_to_str(layer.material.rho)}[kg/m^3]")
         if type(layer) is PorousLayer:
+            model.java.param().set(f"k_fluid_{layer.tag}", f"{num_to_str(layer.material.k_fluid)}[W/(m*K)]")
+            model.java.param().set(f"Cp_fluid_{layer.tag}", f"{num_to_str(layer.material.Cp_fluid)}[J/(kg*K)]")
+            model.java.param().set(f"rho_fluid_{layer.tag}", f"{num_to_str(layer.material.rho_fluid)}[kg/m^3]")
+            model.java.param().set(f"k_solid_{layer.tag}", f"{num_to_str(layer.material.k_matrix)}[W/(m*K)]")
+            model.java.param().set(f"Cp_solid_{layer.tag}", f"{num_to_str(layer.material.Cp_matrix)}[J/(kg*K)]")
+            model.java.param().set(f"rho_solid_{layer.tag}", f"{num_to_str(layer.material.rho_matrix)}[kg/m^3]")
+            model.java.param().set(f"eps_{layer.tag}", f"{num_to_str(layer.material.porosity)}[1]")
             if layer.velocity > 0:
-                model.java.param().set(f"Cf_{layer.tag}", f"{num_to_str(layer.material.rho_fluid)}[kg/m^3]*{num_to_str(layer.material.Cp_fluid)}[J/(kg*K)]")
                 model.java.param().set(f"v_{layer.tag}", f"{num_to_str(layer.velocity)}[m/s]")
 
     toc = time.time()
@@ -115,15 +118,15 @@ def init_model(client, params, geology):
         if i == 0:
             end = "0"
             T_offset = "T_surface"
-            expr = f"{T_offset}-q_geothermal/k_{geology.layers[i].tag}*z"
+            expr = f"{T_offset}-q_geothermal/k_eff_{geology.layers[i].tag}*z"
         else:
             if i - 1 == 0:
                 h_offset = f"h_{geology.layers[i-1].tag}"
             else:
                 h_offset += f"+h_{geology.layers[i-1].tag}"
-            T_offset += f"+q_geothermal/k_{geology.layers[i-1].tag}*h_{geology.layers[i-1].tag}"
+            T_offset += f"+q_geothermal/k_eff_{geology.layers[i-1].tag}*h_{geology.layers[i-1].tag}"
             end += f"-h_{geology.layers[i-1].tag}"
-            expr = f"{T_offset}-q_geothermal/k_{geology.layers[i].tag}*(z+{h_offset})"
+            expr = f"{T_offset}-q_geothermal/k_eff_{geology.layers[i].tag}*(z+{h_offset})"
         pieces.append([start, end, expr])
 
     model.java.func().create("pw1", "Piecewise")
@@ -293,55 +296,6 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-#    model.java.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
-#
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").create("size1", "Size")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("custom", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hmaxactive", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hmax", "5[mm]")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hminactive", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("collar_edge").feature("size1").set("hmin", "5[mm]")
-#
-#    model.java.component("comp1").mesh("mesh1").create("ground_surface_mesh", "FreeTri")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").label("Ground Surface Mesh")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").selection().named("ground_surface_selection")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").set("method", "del")
-#
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").create("size1", "Size")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hauto", "1")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("custom", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hminactive", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hmin", "1[mm]")
-#    #model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hmaxactive", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hmax", "5[m]")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgradactive", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("ground_surface_mesh").feature("size1").set("hgrad", "1.1")
-#
-#    model.java.component("comp1").mesh("mesh1").create("swept_mesh", "Sweep")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
-#
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("type", "predefined")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("method", "geometric")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("symmetric", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("elemcount", "30")
-#    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("elemratio", "10")
-#
-#    model.java.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
-#
-#    model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").create("size1", "Size")
-#    model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hauto", "1")
-#    model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("custom", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hminactive", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hmin", "1[mm]")
-#    #model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hmaxactive", "on")
-#    #model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hmax", "10[m]")
-#    model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hgradactive", "on")
-#    model.java.component("comp1").mesh("mesh1").feature("tetrahedral_mesh").feature("size1").set("hgrad", "1.1")
-
     model.java.component("comp1").mesh("mesh1").create("collar_edge", "Edge")
     model.java.component("comp1").mesh("mesh1").feature("collar_edge").selection().named("collar_edge_selection")
     model.java.component("comp1").mesh("mesh1").feature("collar_edge").label("Collar Edge Mesh")
@@ -363,8 +317,23 @@ def init_model(client, params, geology):
     model.java.component("comp1").mesh("mesh1").feature("swept_mesh").selection().named("sweep_domains_selection")
     model.java.component("comp1").mesh("mesh1").feature("swept_mesh").label("Swept Mesh")
 
-    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution")
-    model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "10")
+    #model.java.component("comp1").mesh("mesh1").feature("swept_mesh").create("dis1", "Distribution")
+    #model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature("dis1").set("numelem", "10")
+
+    for i, layer in enumerate(geology.layers):
+
+        if layer.z_from <= -params.L_borehole:
+            break
+
+        num_elem = int(np.max([20, np.ceil(layer.thickness/5)]))
+
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").create(f"dis{i+1}", "Distribution")
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").set("type", "predefined")
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").set("growthrate", "exponential")
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").set("elemcount", str(num_elem))
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").set("elemratio", "10")
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").set("symmetric", "on")
+        model.java.component("comp1").mesh("mesh1").feature("swept_mesh").feature(f"dis{i+1}").selection().named(f"{layer.tag}_selection")
 
     model.java.component("comp1").mesh("mesh1").create("tetrahedral_mesh", "FreeTet")
 
@@ -392,52 +361,78 @@ def init_model(client, params, geology):
 
     tic = time.time()
 
-    model.java.component("comp1").physics().create("c", "CoefficientFormPDE", "geom1")
+    model.java.component("comp1").physics().create("ht", "PorousMediaHeatTransfer", "geom1")
 
-    model.java.component("comp1").physics("c").field("dimensionless").component(["T"])
+    model.java.component("comp1").physics("ht").prop("ShapeProperty").set("order_temperature", "1")
 
-    model.java.component("comp1").physics("c").prop("Units").set("DependentVariableQuantity", "temperature")
-    model.java.component("comp1").physics("c").prop("Units").set("CustomDependentVariableUnit", "K")
-
-    model.java.component("comp1").physics("c").prop("Units").set("SourceTermQuantity", "powerdensity")
-    model.java.component("comp1").physics("c").prop("Units").set("CustomSourceTermUnit", "W/m^3")
-
-    model.java.component("comp1").physics("c").prop("ShapeProperty").set("order", "1")
-    model.java.component("comp1").physics("c").prop("ShapeProperty").set("valueType", "real")
-
-    model.java.component("comp1").physics("c").feature("init1").set("T", "T_initial(z)")
-
-    model.java.component("comp1").physics("c").create("dir1", "DirichletBoundary", 2)
-    model.java.component("comp1").physics("c").feature("dir1").label("Ground Surface Temperature")
-    model.java.component("comp1").physics("c").feature("dir1").selection().named("ground_surface_selection")
-    model.java.component("comp1").physics("c").feature("dir1").set("r", "T_surface")
-
-    model.java.component("comp1").physics("c").create("flux1", "FluxBoundary", 2)
-    model.java.component("comp1").physics("c").feature("flux1").label("Geothermal Heat Flux")
-    model.java.component("comp1").physics("c").feature("flux1").selection().named("geothermal_boundary_selection")
-    model.java.component("comp1").physics("c").feature("flux1").set("g", "q_geothermal")
-
-    model.java.component("comp1").physics("c").create("flux2", "FluxBoundary", 2)
-    model.java.component("comp1").physics("c").feature("flux2").label("Borehole Wall Heat Flux")
-    model.java.component("comp1").physics("c").feature("flux2").selection().named("borehole_wall_selection")
-    model.java.component("comp1").physics("c").feature("flux2").set("g", "-Q_extraction/A_wall")
+    model.java.component("comp1").physics("ht").feature("init1").set("Tinit", "T_initial(z)")
 
     for i, layer in enumerate(geology.layers):
-        if i > 0:
-            model.java.component("comp1").physics("c").create(f"cfeq{i+1}", "CoefficientFormPDE", 3)
-            model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").selection().named(f"{layer.tag}_selection")
-        model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").set("c", [f"k_{layer.tag}", "0", "0", "0", f"k_{layer.tag}", "0", "0", "0", f"k_{layer.tag}"])
-        model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").set("f", "0")
-        model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").set("da", f"rho_{layer.tag}*Cp_{layer.tag}")
-        if type(layer) == PorousLayer and layer.velocity > 0:
-            model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").set("be", [f"Cf_{layer.tag}*v_{layer.tag}", "0", "0"])
-        model.java.component("comp1").physics("c").feature(f"cfeq{i+1}").label(f"{layer.name} PDE")
+
+        if type(layer) is PorousLayer:
+
+            model.java.component("comp1").physics("ht").create(f"porous{i+2}", "PorousMediumHeatTransferModel", 3)
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").selection().named(f"{layer.tag}_selection")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").label(layer.name)
+
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").label("Water")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("k_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("k", [[f"k_fluid_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_fluid_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_fluid_{layer.tag}"]])
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("rho_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("rho", f"rho_fluid_{layer.tag}")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("Cp_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("Cp", f"Cp_fluid_{layer.tag}")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("gamma_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("gamma", "1")
+
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("porousMatrixPropertiesType", "solidPhaseProperties")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").label(layer.name)
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("poro_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("poro", f"eps_{layer.tag}")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("k_sp_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("k_sp", [[f"k_solid_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_solid_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_solid_{layer.tag}"]])
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("rho_sp_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("rho_sp", f"rho_solid_{layer.tag}")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("Cp_sp_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("pm1").set("Cp_sp", f"Cp_solid_{layer.tag}")
+
+            if layer.velocity > 0:
+                model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("u_src", "userdef");
+                model.java.component("comp1").physics("ht").feature(f"porous{i+2}").feature("fluid1").set("u", [f"v_{layer.tag}", "0", "0"])
+
+        else:
+
+            model.java.component("comp1").physics("ht").create(f"solid{i+1}", "SolidHeatTransferModel", 3)
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").selection().named(f"{layer.tag}_selection")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").label(f"{layer.name} Solid")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("k_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("k", [[f"k_eff_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_eff_{layer.tag}"], ["0"], ["0"], ["0"], [f"k_eff_{layer.tag}"]])
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("rho_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("rho", f"rho_eff_{layer.tag}")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("Cp_mat", "userdef")
+            model.java.component("comp1").physics("ht").feature(f"solid{i+1}").set("Cp", f"Cp_eff_{layer.tag}")
+
+    model.java.component("comp1").physics("ht").create("ground_surface_temperature", "TemperatureBoundary", 2)
+    model.java.component("comp1").physics("ht").feature("ground_surface_temperature").label("Ground Surface Temperature")
+    model.java.component("comp1").physics("ht").feature("ground_surface_temperature").selection().named("ground_surface_selection")
+    model.java.component("comp1").physics("ht").feature("ground_surface_temperature").set("T0", "T_surface")
+
+    model.java.component("comp1").physics("ht").create("geothermal_heat_flux", "HeatFluxBoundary", 2)
+    model.java.component("comp1").physics("ht").feature("geothermal_heat_flux").label("Geothermal Heat Flux")
+    model.java.component("comp1").physics("ht").feature("geothermal_heat_flux").selection().named("geothermal_boundary_selection")
+    model.java.component("comp1").physics("ht").feature("geothermal_heat_flux").set("q0", "q_geothermal")
+    model.java.component("comp1").physics("ht").feature("geothermal_heat_flux").set("materialType", "solid")
+
+    model.java.component("comp1").physics("ht").create("borehole_wall_heat_flux", "HeatFluxBoundary", 2)
+    model.java.component("comp1").physics("ht").feature("borehole_wall_heat_flux").label("Borehole Wall Heat Flux")
+    model.java.component("comp1").physics("ht").feature("borehole_wall_heat_flux").selection().named("borehole_wall_selection")
+    model.java.component("comp1").physics("ht").feature("borehole_wall_heat_flux").set("q0", "-Q_extraction/A_wall")
 
     if geology.has_groundwater_flow:
-        model.java.component('comp1').physics('c').create('pc1', 'PeriodicCondition', 2)
-        model.java.component("comp1").physics("c").feature("pc1").selection().named("left_and_right_boundaries_selection")
-        model.java.component("comp1").physics("c").feature("pc1").create("dd1", "DestinationDomains", 2)
-        model.java.component("comp1").physics("c").feature("pc1").feature("dd1").selection().named("left_boundary_selection")
+        model.java.component("comp1").physics("ht").create("pc1", "PeriodicHeat", 2)
+        model.java.component("comp1").physics("ht").feature("pc1").selection().named("left_and_right_boundaries_selection")
+        model.java.component("comp1").physics("ht").feature("pc1").create("dd1", "DestinationDomains", 2)
+        model.java.component("comp1").physics("ht").feature("pc1").feature("dd1").selection().named("right_boundary_selection")
 
     toc = time.time()
 
@@ -470,7 +465,7 @@ def init_model(client, params, geology):
     model.java.component("comp1").variable().create("var1")
     model.java.component("comp1").variable("var1").set("T_min", "borehole_wall_minimum(T)")
     model.java.component("comp1").variable("var1").set("T_ave", "borehole_wall_average(T)")
-    model.java.component("comp1").variable("var1").set("Q_wall", "4*borehole_wall_integration(ht.ndflux)")
+    ### *** model.java.component("comp1").variable("var1").set("Q_wall", "4*borehole_wall_integration(ht.ndflux)")
 
     if params.monthly_fractions is not None:
         model.java.component("comp1").variable("var1").set("Q_extraction", "(E_annual*monthly_fractions(t))/(1[a]/12)")
@@ -481,7 +476,9 @@ def init_model(client, params, geology):
 
     print(f"Done in {time_elapsed(toc-tic)}.")
 
+    # -------------------------------------------------------------------------
     # Creates solution and solver.
+    # -------------------------------------------------------------------------
 
     print("Creating solution and solver...", end=" ")
 
@@ -532,40 +529,6 @@ def init_model(client, params, geology):
 
     print(f"Done in {time_elapsed(toc-tic)}.")
 
-    # Evaluates the first time step.
-
-    # print("Evaluating the first time step...", end=" ")
-
-    # tic = time.time()
-
-    # model.sol("sol1").runFromTo("st1", "v1")
-
-    # toc = time.time()
-
-    # print(f"Done in {time_elapsed(toc-tic)}.")
-
-    # Adds a plot.
-
-    # print("Adding a plot...", end=" ")
-
-    # tic = time.time()
-
-    # model.java.result().create("pg1", "PlotGroup1D")
-    # model.java.result("pg1").run()
-    # model.java.result("pg1").create("lngr1", "LineGraph")
-    # model.java.result("pg1").feature("lngr1").selection().named("borehole_edge_selection")
-    # model.java.result("pg1").feature("lngr1").set("expr", "z")
-    # model.java.result("pg1").feature("lngr1").set("xdata", "expr")
-    # model.java.result("pg1").feature("lngr1").set("xdataunit", "degC")
-    # model.java.result("pg1").feature().duplicate("lngr2", "lngr1")
-    # model.java.result("pg1").run()
-    # model.java.result("pg1").feature("lngr2").set("xdataexpr", f"13.2[degC]-{gradient}[K/km]*z")
-    # model.java.result("pg1").run()
-
-    # toc = time.time()
-
-    # print(f"Done in {time_elapsed(toc-tic)}.")
-
     xmi = model.java.sol("sol1").feature("st1").xmeshInfo()
 
     num_dofs = xmi.nDofs()
@@ -583,18 +546,26 @@ if __name__ == "__main__":
     params = Parameters(L_borehole=300, D_borehole=0.115, borehole_spacing=20, E_annual=30, num_years=20)
     print(params)
     # Creates and prints materials.
-    sand = PorousMaterial("Sand", 1, 1000, 1800, 0.333)
-    granite = Material("Granite", 3, 730, 2700)
+    sand = PorousMaterial("Sand", 1, 1000, 1500, porosity=0.30)
+    granite = Material("Granite", 3, 700, 2700)
+    sandstone = PorousMaterial("Sandstone", 2.5, 700, 2500, porosity=0.15)
+    gneiss = Material("Gneiss", 4, 800, 2900)
     print("Materials", 50*"=")
     print(sand)
     print(granite)
+    print(sandstone)
+    print(gneiss)
     # Creates and prints layers.
-    sand_layer = PorousLayer("Sand Layer", sand, 0, -100, 1.23e-4)
-    granite_layer = Layer("Granite Layer", granite, -100, -500)
+    sand_layer = PorousLayer("Sand Layer", sand, 0, -100, velocity=1e-4)
+    granite_layer = Layer("Granite Layer", granite, -100, -200)
+    sandstone_layer = PorousLayer("Sandstone Layer", sandstone, -200, -300, velocity=1e-5)
+    gneiss_layer = Layer("Gneiss Layer", gneiss, -300, -1000)
     print(sand_layer)
     print(granite_layer)
+    print(sandstone_layer)
+    print(gneiss_layer)
     # Creates and prints geology.
-    geology = Geology("Test Geology", 6.5, 0.065, layers=[sand_layer, granite_layer])
+    geology = Geology("Test Geology", 6.5, 0.065, layers=[sand_layer, granite_layer, sandstone_layer, gneiss_layer])
     print(geology)
     # Creates and saves model.
     client = mph.start(cores=8)
