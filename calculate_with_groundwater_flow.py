@@ -1,5 +1,6 @@
 from comsol import Parameters, init_model, eval_temp
 from geology import Geology, PorousMaterial, PorousLayer
+from itertools import product
 import matplotlib.pyplot as plt
 from utils import save_model
 import pandas as pd
@@ -129,69 +130,79 @@ if __name__ == "__main__":
     geology12.add_layer(PorousLayer("Eocene Layer",          z_from=-175.0, z_to=-320.0, material=eocene_rocks,          velocity=v_eocene))
     geology12.add_layer(PorousLayer("Triassic Layer",        z_from=-320.0, z_to=-559.5, material=triassic_rocks,        velocity=v_triassic))
 
-    geology = [geology1, geology2, geology3, geology4, geology5, geology6, geology7, geology8, geology9, geology10, geology11, geology12]
+    geologies = [geology1, geology2, geology3, geology4, geology5, geology6, geology7, geology8, geology9, geology10, geology11, geology12]
 
     # Estimates the shallow geothermal potentials.
 
     if os.path.exists(file_name):
-        data_frame = pd.read_excel(file_name)
+        data_frame = pd.read_excel(file_name, index_col=False)
+        calculated = list(zip(data_frame["Geology"], data_frame["L_borehole"], data_frame["borehole_spacing"]))
     else:
         data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "R_squared", "RMSE"])
 
-    L_borehole = [100, 200]
-    borehole_spacing = [20, 500]
+    uncalculated = list(product(*[map(lambda geology: geology.name, geologies), [100, 200], [20, 500]]))
+
+    while len(calculated) > 0:
+        geology_name, L_borehole, borehole_spacing = calculated.pop()
+        print(f"Skipping geology={geology_name}, L_borehole={L_borehole} m, borehole_spacing={borehole_spacing} m")
+        uncalculated.remove((geology_name, L_borehole, borehole_spacing))
 
     client = mph.start(cores=8)
 
-    for i in range(len(L_borehole)):
-        for j in range(len(borehole_spacing)):
-            for k in range(len(geology)):
+    while len(uncalculated) > 0:
 
-                df = data_frame[(data_frame["L_borehole"]==L_borehole[i]) & (data_frame["borehole_spacing"]==borehole_spacing[j]) & (data_frame["Geology"]==geology[k].name)]
+        geology_name, L_borehole, borehole_spacing = uncalculated.pop()
 
-                if len(df) > 0:
-                    print(f"Skipping geology={geology[k].name}, L_borehole={L_borehole[i]} m, borehole_spacing={borehole_spacing[j]} m")
-                    continue
-                else:
-                    print(f"Calculating geology={geology[k].name}, L_borehole={L_borehole[i]} m, borehole_spacing={borehole_spacing[j]} m")
+        print(f"Calculating geology={geology_name}, L_borehole={L_borehole} m, borehole_spacing={borehole_spacing} m")
 
-                params = Parameters(L_borehole=L_borehole[i], D_borehole=0.150, borehole_spacing=borehole_spacing[j], E_annual=0, num_years=50, monthly_fractions=monthly_fractions)
+        params = Parameters(L_borehole=L_borehole, D_borehole=0.150, borehole_spacing=borehole_spacing, E_annual=0, num_years=50, monthly_fractions=monthly_fractions)
 
-                model = init_model(client, params, geology[k])
+        geology = next(filter(lambda geology: geology.name==geology_name, geologies))
 
-                save_model(model, f"geology{k+1}_{L_borehole[i]}m_{borehole_spacing[j]}m")
+        model = init_model(client, params, geology)
 
-                x = [5, 10, 20]
-                y = [eval_temp(model, _x) for _x in x]
+        if borehole_spacing == 20:
+            x = [5, 10, 20]
+        elif borehole_spacing == 500:
+            x = [10, 30, 40]
+        else:
+            raise ValueError("borehole_spacing")
 
-                p = np.polyfit(x, y, 1)
+        y = [eval_temp(model, x[i]) for i in range(len(x))]
 
-                SS_res = np.sum((y - np.polyval(p, x))**2)
-                SS_tot = np.sum((y - np.mean(y))**2)
+        p = np.polyfit(x, y, 1)
 
-                R_squared = 1 - SS_res / SS_tot
+        SS_res = np.sum((y - np.polyval(p, x))**2)
+        SS_tot = np.sum((y - np.mean(y))**2)
 
-                rmse = np.sqrt(np.mean((y - np.polyval(p, x))**2))
+        R_squared = 1 - SS_res / SS_tot
 
-                xi = np.linspace(x[0], x[-1], 1000)
-                yi = np.polyval(p, xi)
+        RMSE = np.sqrt(np.mean((y - np.polyval(p, x))**2))
 
-                crude_estimate = p[1] / -p[0]
+        xi = np.linspace(x[0], x[-1], 1000)
+        yi = np.polyval(p, xi)
 
-                plt.figure()
-                plt.plot(x, y, "bo")
-                plt.plot(xi, yi, "r-")
-                plt.axhline(0, ls="--", color="r")
-                plt.axvline(crude_estimate, ls="--", color="r")
-                plt.plot([crude_estimate], [0], "rx")
-                plt.gca().set_xlim([x[0], x[-1]])
-                plt.xlabel("E_annual [MWh]")
-                plt.ylabel(u"temp [\xb0C]")
-                plt.tight_layout()
-                plt.show()
+        crude_estimate = -p[1] / p[0]
 
-                print(f"geology={geology[k].name}, L_borehole={params.L_borehole} m, borehole_spacing={params.borehole_spacing} m, crude_estimate={crude_estimate:.6f} MWh")
+        plt.figure()
+        plt.plot(x, y, "bo")
+        plt.plot(xi, yi, "r-")
+        plt.axhline(0, ls="--", color="r")
+        plt.axvline(crude_estimate, ls="--", color="r")
+        plt.plot([crude_estimate], [0], "rx")
+        plt.gca().set_xlim([x[0], x[-1]])
+        plt.xlabel("E_annual [MWh]")
+        plt.ylabel(u"T_wall [\xb0C]")
+        plt.tight_layout()
+        plt.show()
 
-                data_frame.loc[len(data_frame)] = [geology[k].name, L_borehole[i], borehole_spacing[j], crude_estimate, R_squared, rmse]
+        print(f"geology={geology.name}, L_borehole={params.L_borehole} m, borehole_spacing={params.borehole_spacing} m, crude_estimate={crude_estimate:.6f} MWh")
 
-                data_frame.to_excel(file_name)
+        data_frame.loc[len(data_frame)] = [geology.name, L_borehole, borehole_spacing, crude_estimate, R_squared, RMSE]
+
+        data_frame.to_excel(file_name, index=False)
+
+# geology=B-180, L_borehole=200 m, borehole_spacing=500 m, crude_estimate=30.922095 MWh
+# geology=Pm_1, L_borehole=200 m, borehole_spacing=500 m, crude_estimate=30.006878 MWh
+# geology=B-64, L_borehole=200 m, borehole_spacing=500 m, crude_estimate=32.111801 MWh
+# geology=B-38, L_borehole=200 m, borehole_spacing=500 m, crude_estimate=33.251697 MWh
