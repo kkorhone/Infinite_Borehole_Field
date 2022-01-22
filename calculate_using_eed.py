@@ -163,8 +163,6 @@ if __name__ == "__main__":
                     "monthly_fractions": monthly_fractions
                 }
 
-                print(params)
-
                 if borehole_spacing[j] == 20:
                     if L_borehole[i] == 100:
                         E_max, T_fluid = eed.optimize_energy(params, [5000, 20000], 0)

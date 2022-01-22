@@ -1,10 +1,11 @@
 import scipy.optimize
 import numpy as np
 import pyautogui
-import time
-import os
+import os, time
+
 
 pyautogui.FAILSAFE = False
+
 
 def write_dat_file(file_name, params):
     file = open(file_name, "w")
@@ -213,7 +214,9 @@ def write_dat_file(file_name, params):
     file.write("E:\\TEMP\\kkorhone\\\n")
     file.close()
 
-def eval_using_eed(params):
+
+def eval_fluid_temp(params, E_annual):
+    params["E_annual"] = E_annual
     if os.path.exists("eval.out"):
         os.remove("eval.out")
     if os.path.exists("eval.dat"):
@@ -226,10 +229,7 @@ def eval_using_eed(params):
     pyautogui.keyUp("altleft")
     pyautogui.press("1")
     pyautogui.press("f9")
-    count = 0
-    while os.path.exists("eval.out") == False:
-        time.sleep(1.0)
-        count += 1
+    time.sleep(1)
     file = open("eval.out", "r")
     lines = file.readlines()
     file.close()
@@ -241,29 +241,42 @@ def eval_using_eed(params):
     print(f"E_annual={ahl} T_fluid={mft}")
     return mft
 
-def eval_fluid_temp(params, E_annual):
-    params["E_annual"] = E_annual
-    return eval_using_eed(params)
 
 def optimize_energy(params, bounds, T_target):
+
+    import win32api
+
+    win32api.WinExec(r"C:\Program Files (x86)\BLOCON\EED_v4.20\EED_v4_20.exe")
+
+    time.sleep(5)
+
     write_dat_file("eval.dat", params)
 
     w = pyautogui.getWindowsWithTitle("Earth Energy Designer")[0]
     w.activate()
 
+    # File -> Open -> "eval.dat"
     pyautogui.keyDown("altleft")
     pyautogui.press("f")
     pyautogui.keyUp("altleft")
-
     pyautogui.press("o")
-
     pyautogui.keyDown("altleft")
     pyautogui.press("n")
     pyautogui.keyUp("altleft")
-
     pyautogui.write("eval.dat")
-
     pyautogui.press("enter")
+
+    # File -> Save
+    pyautogui.keyDown("altleft")
+    pyautogui.press("f")
+    pyautogui.keyUp("altleft")
+    pyautogui.press("s")
+
+    # Settings -> Show results with more digits
+    pyautogui.keyDown("altleft")
+    pyautogui.press("e")
+    pyautogui.keyUp("altleft")
+    pyautogui.press("h")
 
     obj_func = lambda E_annual: np.abs(eval_fluid_temp(params, E_annual) - T_target)
 
@@ -271,7 +284,10 @@ def optimize_energy(params, bounds, T_target):
 
     T_fluid = eval_fluid_temp(params, E_max)
 
+    w.close()
+
     return E_max, T_fluid
+
 
 if __name__ == "__main__":
 
@@ -285,10 +301,10 @@ if __name__ == "__main__":
         "D_borehole": 0.140,
         "borehole_spacing": 34,
         "R_borehole": 0.123,
-        "E_annual": 12345,
-        "SPF": 99999,
+        "E_annual": 3456,
+        "SPF": 3,
         "num_years": 50,
         "monthly_fractions": np.array([0.194717, 0.17216, 0.128944, 0.075402, 0.024336, 0, 0, 0, 0.025227, 0.076465, 0.129925, 0.172824])
     }
 
-    optimize_energy(params, [500, 5000], 0)
+    optimize_energy(params, [1e3, 10e3], T_target=-1.5)
