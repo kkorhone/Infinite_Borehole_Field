@@ -432,7 +432,7 @@ def init_model(client, params, geology):
         model.java.component("comp1").physics("ht").create("pc1", "PeriodicHeat", 2)
         model.java.component("comp1").physics("ht").feature("pc1").selection().named("left_and_right_boundaries_selection")
         model.java.component("comp1").physics("ht").feature("pc1").create("dd1", "DestinationDomains", 2)
-        model.java.component("comp1").physics("ht").feature("pc1").feature("dd1").selection().named("right_boundary_selection")
+        model.java.component("comp1").physics("ht").feature("pc1").feature("dd1").selection().named("left_boundary_selection")
 
     toc = time.time()
 

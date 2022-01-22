@@ -13,7 +13,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # Gets rid of the annoying OpenMP in
 
 if __name__ == "__main__":
 
-    file_name = "results_v9_without_groundwater_flow.xlsx"
+    file_name = "results_without_groundwater_flow.xlsx"
 
     # Sets up the monthly energy consumption profile.
 

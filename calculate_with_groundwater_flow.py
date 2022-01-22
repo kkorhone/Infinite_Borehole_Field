@@ -13,7 +13,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # Gets rid of the annoying OpenMP in
 
 if __name__ == "__main__":
 
-    file_name = "results_v9_with_groundwater_flow.xlsx"
+    file_name = "results_with_groundwater_flow.xlsx"
 
     # Sets up the monthly energy consumption profile.
 
@@ -139,6 +139,7 @@ if __name__ == "__main__":
         calculated = list(zip(data_frame["Geology"], data_frame["L_borehole"], data_frame["borehole_spacing"]))
     else:
         data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "R_squared", "RMSE"])
+        calculated = []
 
     uncalculated = list(product(*[map(lambda geology: geology.name, geologies), [100, 200], [20, 500]]))
 

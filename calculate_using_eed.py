@@ -1,19 +1,14 @@
-from comsol import Parameters, init_model, eval_temp
 from geology import Geology, PorousMaterial, PorousLayer
-import matplotlib.pyplot as plt
-from utils import save_model
 import pandas as pd
 import numpy as np
-import os, mph
 import eed
+import os
 
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # Gets rid of the annoying OpenMP initialization error.
 
 
 if __name__ == "__main__":
-
-    file_name = "results_v8_with_groundwater_flow.xlsx"
 
     # Sets up the monthly energy consumption profile.
 
@@ -165,7 +160,7 @@ if __name__ == "__main__":
                     "E_annual": 100,
                     "SPF": 99999,
                     "num_years": 50,
-                    "monthly_fractions": np.array([0.194717, 0.17216, 0.128944, 0.075402, 0.024336, 0, 0, 0, 0.025227, 0.076465, 0.129925, 0.172824])
+                    "monthly_fractions": monthly_fractions
                 }
 
                 print(params)
