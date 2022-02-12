@@ -2,7 +2,6 @@ from comsol import Parameters, init_model, eval_temp
 from geology import Geology, PorousMaterial, PorousLayer
 from itertools import product
 import matplotlib.pyplot as plt
-from utils import save_model
 import pandas as pd
 import numpy as np
 import os, mph

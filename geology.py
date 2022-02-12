@@ -116,10 +116,11 @@ class Geology:
         averages = {"k": 0, "Cp": 0, "rho": 0, "C": 0}
         for layer in self.layers:
             weight = layer.thickness / self.thickness
-            averages["k"] += weight * layer.material.k
+            averages["k"] += layer.material.k
             averages["Cp"] += weight * layer.material.Cp
             averages["rho"] += weight * layer.material.rho
             averages["C"] += weight * layer.material.rho * layer.material.Cp
+        averages["k"] /= len(self.layers)
         return averages
 
     def add_layers(self, layers):
@@ -163,3 +164,7 @@ if __name__ == "__main__":
     print("Geologies", 50*"=")
     print(geology1)
     print(geology2)
+    # ...
+    import budapest
+    for geology in budapest.make_geologies():
+        print(geology.name, geology.calc_averages()["k"])

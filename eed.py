@@ -242,17 +242,21 @@ def eval_fluid_temp(params, E_annual):
     return mft
 
 
-def optimize_energy(params, bounds, T_target):
+def optimize_energy(params, bounds):
 
     import win32api
 
-    win32api.WinExec(r"C:\Program Files (x86)\BLOCON\EED_v4.20\EED_v4_20.exe")
-
-    time.sleep(5)
+    while True:
+        windows = pyautogui.getWindowsWithTitle("Earth Energy Designer")
+        if len(windows) > 0:
+            w = windows[0]
+            break
+        else:
+            win32api.WinExec(r"C:\Program Files (x86)\BLOCON\EED_v4.20\EED_v4_20.exe")
+            time.sleep(5)
 
     write_dat_file("eval.dat", params)
 
-    w = pyautogui.getWindowsWithTitle("Earth Energy Designer")[0]
     w.activate()
 
     # File -> Open -> "eval.dat"
@@ -278,13 +282,13 @@ def optimize_energy(params, bounds, T_target):
     pyautogui.keyUp("altleft")
     pyautogui.press("h")
 
-    obj_func = lambda E_annual: np.abs(eval_fluid_temp(params, E_annual) - T_target)
+    obj_func = lambda E_annual: np.abs(eval_fluid_temp(params, E_annual) - params["T_target"])
 
     E_max = scipy.optimize.fminbound(obj_func, bounds[0], bounds[1], xtol=1e-3)
 
     T_fluid = eval_fluid_temp(params, E_max)
 
-    w.close()
+    #w.close()
 
     return E_max, T_fluid
 
@@ -304,7 +308,8 @@ if __name__ == "__main__":
         "E_annual": 3456,
         "SPF": 3,
         "num_years": 50,
-        "monthly_fractions": np.array([0.194717, 0.17216, 0.128944, 0.075402, 0.024336, 0, 0, 0, 0.025227, 0.076465, 0.129925, 0.172824])
+        "monthly_fractions": np.array([0.194717, 0.17216, 0.128944, 0.075402, 0.024336, 0, 0, 0, 0.025227, 0.076465, 0.129925, 0.172824]),
+        "T_target": -1.5
     }
 
-    optimize_energy(params, [1e3, 10e3], T_target=-1.5)
+    optimize_energy(params, [1e3, 10e3])

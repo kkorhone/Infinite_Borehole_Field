@@ -117,7 +117,7 @@ if __name__ == "__main__":
     data_frame = pd.DataFrame(columns=["Geology", "L_borehole", "borehole_spacing", "E_annual", "T_fluid"])
 
     L_borehole = [100, 200]
-    borehole_spacing = [500]
+    borehole_spacing = [20, 500]
 
     for i in range(len(L_borehole)):
         for j in range(len(borehole_spacing)):
@@ -141,27 +141,27 @@ if __name__ == "__main__":
                     "L_borehole": L_borehole[i],
                     "D_borehole": 0.150,
                     "borehole_spacing": borehole_spacing[j],
-                    "R_borehole": 0.085,
+                    "R_borehole": 0.0,
                     "E_annual": 100,
                     "SPF": 99999,
                     "num_years": 50,
                     "monthly_fractions": monthly_fractions,
-                    "T_target": -1.5
+                    "T_target": 0
                 }
 
                 if borehole_spacing[j] == 20:
                     if L_borehole[i] == 100:
-                        E_max, T_fluid = eed.optimize_energy(params, [5000, 20000])
+                        E_max, T_fluid = eed.optimize_energy(params, [5000, 20000], 0)
                     elif L_borehole[i] == 200:
-                        E_max, T_fluid = eed.optimize_energy(params, [5000, 40000])
+                        E_max, T_fluid = eed.optimize_energy(params, [5000, 40000], 0)
                     else:
                         raise ValueError("L_borehole")
                     E_annual = E_max / 1156
                 elif borehole_spacing[j] == 500:
                     if L_borehole[i] == 100:
-                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50])
+                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50], 0)
                     elif L_borehole[i] == 200:
-                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50])
+                        E_annual, T_fluid = eed.optimize_energy(params, [1, 50], 0)
                     else:
                         raise ValueError("L_borehole")
                 else:
@@ -171,4 +171,4 @@ if __name__ == "__main__":
 
                 data_frame.loc[len(data_frame)] = [geology[k].name, L_borehole[i], borehole_spacing[j], E_annual, T_fluid]
 
-                data_frame.to_excel("results_eed_v2.xlsx")
+                data_frame.to_excel("results_eed.xlsx")
