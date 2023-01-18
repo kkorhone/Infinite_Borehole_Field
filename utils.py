@@ -2,17 +2,6 @@ import numpy as np
 import os
 
 
-def max_cap(label):
-    toks = label.lower().split()
-    caps = toks[0]
-    for tok in toks[1:]:
-        if tok in ["a", "an", "the", "of", "in", "on"]:
-            caps += f" {tok}"
-        else:
-            caps += f" {tok.capitalize()}"
-    return caps
-
-
 def num_to_str(num):
     """Makes a nice string out of the specified number."""
     if num == 0:
