@@ -1,4 +1,0 @@
-0-h1            0               T_surface-q_geothermal/k1*z
-0-h1-h2         0-h1            T_surface+q_geothermal/k1*h1-q_geothermal/k2*(z+h1)
-0-h1-h2-h3      0-h1-h2         T_surface+q_geothermal/k1*h1+q_geothermal/k2*h2-q_geothermal/k3*(z+h1+h2)
-0-h1-h2-h3-h4   0-h1-h2-h3      T_surface+q_geothermal/k1*h1+q_geothermal/k2*h2+q_geothermal/k3*h3-q_geothermal/k4*(z+h1+h2+h3)

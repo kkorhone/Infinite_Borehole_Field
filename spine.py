@@ -1,5 +1,0 @@
-fig, ax = plt.subplots()
-ax.plot(x, y)
-ax.spines['left'].set_color('red')
-ax.spines['bottom'].set_alpha(0.2)
-plt.show()
