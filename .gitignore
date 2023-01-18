@@ -128,5 +128,21 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# COMSOL Multiphysics
+# COMSOL models
 *.mph
+*.lock
+
+# Java files
+*.java
+*.class
+
+# MATLAB files
+*.m
+
+# EED files
+Theme.txt
+*.out
+*.dat
+
+# Other...
+_*.py
