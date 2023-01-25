@@ -146,3 +146,5 @@ Theme.txt
 
 # Other...
 _*.py
+hs_*.log
+*.png

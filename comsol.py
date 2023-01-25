@@ -36,9 +36,8 @@ def eval_temp(model, E_annual):
     T_ave = model.evaluate("T_ave", "degC")
     temp = np.min(T_ave)
     toc = time.time()
-    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={num_to_str(E_annual)} MWh, temp={num_to_str(temp)} K")
+    print(f"time_elapsed={time_elapsed(toc-tic)}, E_annual={num_to_str(E_annual)} MWh, temp={num_to_str(temp)} \xb0C")
     return temp
-
 
 
 def init_model(client, params, geology):
